@@ -259,21 +259,20 @@ export async function runWebtopSync() {
 
 // ---------------------------------------------------------------- UI
 
-export function webtopCard() {
+/** Settings rows for Webtop (automatic sync, paste import, timetable PDF). */
+export function webtopRows() {
   const w = S.data.settings.webtop;
   const connected = !!(w.url && w.user && w.pass);
-  return `<div class="card connect">
-    <div class="connect-head"><span class="logo wt" aria-hidden="true">W</span><div><b>וובטופ (Webtop)</b><br>
-      <span class="muted small">${connected ? `${w.name ? `מחובר/ת: ${esc(w.name)} · ` : ''}סנכרון אחרון: ${w.lastSync ? fmtDateTime(w.lastSync) : 'עוד לא'}` : 'מערכת שעות ושיעורי בית אוטומטית, או ייבוא בהעתק-הדבק'}</span></div></div>
-    ${
-      connected
-        ? `<button class="btn primary block" data-act="webtop-sync">${ICON.sync} סנכרון מוובטופ</button>
-           <button class="btn ghost block sm" data-act="webtop-setup">הגדרות החיבור</button>
-           ${S.ui.webtopShape ? `<button class="btn ghost block sm" data-act="webtop-shape">העתקת מבנה הנתונים (בלי פרטים אישיים)</button>` : ''}`
-        : `<button class="btn primary block" data-act="webtop-setup">חיבור אוטומטי לוובטופ</button>`
-    }
-    <button class="btn ghost block" data-act="webtop-paste">ייבוא מבחנים / משימות בהעתק-הדבק</button>
-    <a class="btn ghost block sm" href="https://webtop.smartschool.co.il/" target="_blank" rel="noopener">${ICON.ext} פתיחת וובטופ</a>
+  const chev = `<span class="chev">${ICON.fwd}</span>`;
+  const t = (inner, color) => `<span class="tile-ico t-${color}" aria-hidden="true">${inner}</span>`;
+  return `<div class="card list">
+    <button class="row-btn" data-act="webtop-setup">${t('<b class="tile-letter">W</b>', 'blue')}
+      <span class="grow">וובטופ<span class="sr-sub">${connected ? `${w.name ? `${esc(w.name)} · ` : ''}סנכרון אחרון: ${w.lastSync ? fmtDateTime(w.lastSync) : 'עוד לא'}` : 'חיבור אוטומטי (ניסיוני)'}</span></span>${chev}</button>
+    ${connected ? `<button class="row-btn" data-act="webtop-sync">${t(ICON.sync, 'teal')}<span class="grow">סנכרון עכשיו</span></button>` : ''}
+    <button class="row-btn" data-act="webtop-paste">${t(ICON.tasks, 'orange')}<span class="grow">ייבוא מבחנים בהעתק-הדבק</span>${chev}</button>
+    <button class="row-btn" data-go="#schedule">${t(ICON.calendar, 'green')}<span class="grow">ייבוא מערכת שעות מ-PDF</span>${chev}</button>
+    ${S.ui.webtopShape ? `<button class="row-btn" data-act="webtop-shape">${t(ICON.clip, 'gray')}<span class="grow">העתקת מבנה הנתונים<span class="sr-sub">בלי פרטים אישיים, לשליחה לתיקון</span></span></button>` : ''}
+    <a class="row-btn" href="https://webtop.smartschool.co.il/" target="_blank" rel="noopener">${t(ICON.ext, 'gray')}<span class="grow">פתיחת וובטופ</span>${chev}</a>
   </div>`;
 }
 

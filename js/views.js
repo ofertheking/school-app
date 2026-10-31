@@ -12,10 +12,13 @@ import { weekChart, subjectBars, meter, ring } from './charts.js';
 import { ICON } from './icons.js';
 import { getToken, redirectURI, connectedEmail } from './integrations.js';
 import { storageMode } from './store.js';
-import { head, iconBtn, section, empty, seg, dot, subjectChip } from './components.js';
+import { head, iconBtn, section, empty, seg, dot, subjectChip, tile } from './components.js';
+import { gradesView } from './grades.js';
+import { calendarView } from './calendar.js';
+import { ACCENTS, appearance } from './appearance.js';
 import { todaySection } from './schedule.js';
+import { webtopRows } from './webtop.js';
 import { decksList } from './flashcards.js';
-import { webtopCard } from './webtop.js';
 import { filesGrid } from './files.js';
 import { notebooksGrid } from './notebooks.js';
 
@@ -119,50 +122,58 @@ export function home() {
   const weekMin = weekDays(0).reduce((a, x) => a + x.minutes, 0);
   const pct = (weekMin / goalMin) * 100;
   const st = streak();
+  const today = fmtMinShort(todayMinutes());
+  const week = fmtMinShort(weekMin);
   const exams = upcomingExams().slice(0, 3);
   const tasks = openTasks().slice(0, 5);
 
-  const stats = `<div class="card stats">
-    ${ring(pct, `${Math.round(pct)}%`, 'מהמטרה')}
-    <div class="stat-tiles">
-      <div class="stat"><span class="stat-label">היום</span>${statVal(todayMinutes())}</div>
-      <div class="stat"><span class="stat-label">השבוע</span>${statVal(weekMin)}<span class="stat-sub">מתוך ${d.settings.weeklyGoalH} ש׳</span></div>
-      <div class="stat"><span class="stat-label">רצף</span><span class="stat-value">${st} <small>${st === 1 ? 'יום' : 'ימים'}</small></span></div>
-    </div>
-  </div>`;
+  const studyCard = `<button class="card sum-card" data-go="#study">
+    <span class="sum-head">${ICON.timer} שעות למידה <span class="chev">${ICON.fwd}</span></span>
+    <span class="sum-body">
+      <span>
+        <span class="sum-big"><bdi>${today.value}</bdi></span><span class="sum-unit">${today.unit} היום</span>
+        <span class="sum-stats">
+          <span class="stat"><span class="stat-label">השבוע</span><span class="stat-value"><bdi>${week.value}</bdi> <small>${week.unit}</small></span></span>
+          <span class="stat"><span class="stat-label">מטרה</span><span class="stat-value">${d.settings.weeklyGoalH} <small>ש׳</small></span></span>
+          <span class="stat"><span class="stat-label">רצף</span><span class="stat-value">${st} <small>${st === 1 ? 'יום' : 'ימים'}</small></span></span>
+        </span>
+      </span>
+      ${ring(pct, `${Math.round(pct)}%`, 'מהמטרה')}
+    </span>
+  </button>`;
 
   const quick = `<div class="quick">
-    <button class="quick-btn" data-act="add-exam"><span>${ICON.exam}</span>מבחן</button>
-    <button class="quick-btn" data-act="add-task"><span>${ICON.tasks}</span>משימה</button>
-    <button class="quick-btn" data-act="new-note"><span>${ICON.note}</span>סיכום</button>
-    <button class="quick-btn" data-go="#study"><span>${ICON.timer}</span>ללמוד</button>
+    <button class="quick-btn" data-act="add-exam">${tile('exam', 'red')}מבחן</button>
+    <button class="quick-btn" data-act="add-task">${tile('tasks', 'orange')}משימה</button>
+    <button class="quick-btn" data-act="new-note">${tile('note', 'green')}סיכום</button>
+    <button class="quick-btn" data-go="#study">${tile('timer', 'purple')}ללמוד</button>
   </div>`;
 
   return `
     ${head(`${greeting(now)}${name}`, {
-      actions: iconBtn('go-more', ICON.gear, 'הגדרות'),
+      actions: `${iconBtn('go-search', ICON.search, 'חיפוש')}${iconBtn('go-more', ICON.gear, 'הגדרות')}`,
       sub: `${fmtDateLong(now)}${heb ? ` · ${heb}` : ''}`,
     })}
     ${installCard()}
     ${onboardingCard()}
     ${timerBanner()}
-    ${stats}
+    ${studyCard}
     ${quick}
     ${todaySection()}
     ${section(
       'מבחנים קרובים',
-      exams.length ? `<div class="stack">${exams.map(examCard).join('')}</div>` : empty('🎉', 'אין מבחנים קרובים', `<button class="btn tinted" data-act="add-exam">＋ הוספת מבחן</button>`),
+      exams.length ? `<div class="stack">${exams.map(examCard).join('')}</div>` : `<div class="card">${empty('🎉', 'אין מבחנים קרובים', `<button class="btn tinted" data-act="add-exam">${ICON.plus} הוספת מבחן</button>`)}</div>`,
       `<button class="link-btn" data-go="#exams">הכל</button>`
     )}
     ${section(
       'משימות',
-      tasks.length ? `<div class="card list">${tasks.map(taskRow).join('')}</div>` : empty('✅', 'אין משימות פתוחות'),
+      tasks.length ? `<div class="card list">${tasks.map(taskRow).join('')}</div>` : `<div class="card">${empty('✅', 'אין משימות פתוחות')}</div>`,
       `<button class="link-btn" data-go="#tasks">הכל</button>`
     )}
-    ${d.lessons.length ? '' : `<button class="card row-btn" data-go="#schedule">${ICON.calendar}<span class="grow"><b>מערכת שעות</b><br><span class="muted small">להוסיף את המערכת או לייבא מוובטופ</span></span><span class="chev">${ICON.fwd}</span></button>`}
+    ${d.lessons.length ? '' : `<div class="card list"><button class="row-btn" data-go="#schedule">${tile('calendar', 'teal')}<span class="grow">מערכת שעות<span class="sr-sub">להוסיף ידנית או לייבא מ-PDF</span></span><span class="chev">${ICON.fwd}</span></button></div>`}
     ${
       d.subjects.length
-        ? section('המקצועות שלי', `<div class="chip-scroll">${d.subjects.map((s) => subjectChip(s)).join('')}<button class="chip-btn add" data-act="add-subject">＋</button></div>`)
+        ? section('המקצועות שלי', `<div class="chip-scroll">${d.subjects.map((s) => subjectChip(s)).join('')}<button class="chip-btn add" data-act="add-subject" aria-label="הוספת מקצוע">${ICON.plus}</button></div>`)
         : ''
     }
   `;
@@ -171,21 +182,20 @@ export function home() {
 // ---------- EXAMS ----------
 
 export function exams() {
-  const isUp = S.ui.examsSeg === 'upcoming';
-  const list = isUp ? upcomingExams() : pastExams();
-  const avg = gradeAverage();
+  if (!['upcoming', 'calendar', 'grades'].includes(S.ui.examsSeg)) S.ui.examsSeg = S.ui.examsSeg === 'past' ? 'grades' : 'upcoming';
+  const segCtl = seg('examsSeg', [['upcoming', 'קרובים'], ['calendar', 'לוח שנה'], ['grades', 'ציונים']]);
   let body;
-  if (!list.length) {
-    body = isUp
-      ? empty('📅', 'אין מבחנים קרובים. כדאי להוסיף את לוח המבחנים — אפשר גם לייבא מוובטופ בהגדרות.', `<button class="btn tinted" data-act="add-exam">＋ הוספת מבחן</button>`)
-      : empty('🗂️', 'עוד אין מבחנים שעברו');
-  } else {
-    body = `<div class="stack">${list.map(examCard).join('')}</div>`;
+  if (S.ui.examsSeg === 'calendar') body = calendarView(examCard, taskRow);
+  else if (S.ui.examsSeg === 'grades') body = gradesView(examCard);
+  else {
+    const list = upcomingExams();
+    body = list.length
+      ? `<div class="stack">${list.map(examCard).join('')}</div>`
+      : `<div class="card">${empty('📅', 'אין מבחנים קרובים. אפשר להוסיף מבחנים, או לייבא את לוח המבחנים מוובטופ בהגדרות.', `<button class="btn tinted" data-act="add-exam">${ICON.plus} הוספת מבחן</button>`)}</div>`;
   }
   return `
     ${head('מבחנים', { actions: iconBtn('add-exam', ICON.plus, 'הוספת מבחן') })}
-    ${seg('examsSeg', [['upcoming', 'קרובים'], ['past', 'עברו']])}
-    ${!isUp && avg != null ? `<div class="card avg"><span class="muted">ממוצע ציונים</span><span class="hero-sm">${avg}</span></div>` : ''}
+    ${segCtl}
     ${body}
   `;
 }
@@ -557,87 +567,112 @@ export function subjectDetail(id) {
 export function more() {
   const d = S.data;
   const token = getToken();
-  const clientId = d.settings.clientId;
-  const lastSync = d.settings.lastSync ? fmtDateTime(d.settings.lastSync) : 'עוד לא';
   const mode = storageMode();
+  const ap = appearance();
+  const chev = `<span class="chev">${ICON.fwd}</span>`;
+  const initial = (d.profile.name || '').trim().slice(0, 1) || '🙂';
   return `
     ${head('הגדרות', { back: '#home' })}
 
-    ${section(
-      'פרופיל ומטרות',
-      `<div class="card form-list">
-        <label class="form-row"><span>שם</span><input data-setting="profile.name" value="${esc(d.profile.name)}" placeholder="איך לקרוא לך?" autocomplete="given-name"></label>
-        <label class="form-row"><span>מטרה שבועית (שעות)</span><input type="number" inputmode="numeric" min="1" max="80" data-setting="settings.weeklyGoalH" value="${esc(d.settings.weeklyGoalH)}"></label>
-        <label class="form-row"><span>אורך פומודורו (דקות)</span><input type="number" inputmode="numeric" min="5" max="120" data-setting="settings.pomodoroMin" value="${esc(d.settings.pomodoroMin)}"></label>
-      </div>`
-    )}
+    <div class="card profile-card">
+      <span class="avatar" aria-hidden="true">${esc(initial)}</span>
+      <span class="grow">
+        <input class="profile-name" data-setting="profile.name" value="${esc(d.profile.name)}" placeholder="השם שלך" autocomplete="given-name" aria-label="שם">
+        <span class="sr-sub">${d.subjects.length} מקצועות · ${d.exams.length} מבחנים · ${d.items.length} פריטי חומר</span>
+      </span>
+    </div>
 
-    ${section(
-      'מקצועות',
-      `<div class="card list">
-        ${d.subjects
-          .map(
-            (s) => `<button class="row-btn" data-act="edit-subject" data-id="${s.id}">
-              <span class="dot" style="background:var(--c${s.color % 8})"></span><span class="grow">${esc(s.name)}</span>
-              ${s.classroomId ? '<span class="badge">Classroom</span>' : ''}<span class="chev">${ICON.fwd}</span></button>`
-          )
+    <h3 class="group-title">למידה</h3>
+    <div class="card list">
+      <label class="row-btn">${tile('target', 'red')}<span class="grow">מטרה שבועית</span>
+        <input class="row-input" type="number" inputmode="numeric" min="1" max="80" data-setting="settings.weeklyGoalH" value="${esc(d.settings.weeklyGoalH)}" aria-label="מטרה שבועית בשעות"><span class="row-val">שעות</span></label>
+      <label class="row-btn">${tile('timer', 'orange')}<span class="grow">אורך פומודורו</span>
+        <input class="row-input" type="number" inputmode="numeric" min="5" max="120" data-setting="settings.pomodoroMin" value="${esc(d.settings.pomodoroMin)}" aria-label="אורך פומודורו בדקות"><span class="row-val">דקות</span></label>
+    </div>
+
+    <h3 class="group-title">מראה</h3>
+    <div class="card appearance">
+      <div class="seg theme-seg" role="radiogroup" aria-label="ערכת נושא">
+        ${[['system', 'אוטומטי'], ['light', 'בהיר'], ['dark', 'כהה']]
+          .map(([v, l]) => `<button class="seg-btn${ap.theme === v ? ' on' : ''}" role="radio" aria-checked="${ap.theme === v}" data-act="set-theme" data-val="${v}">${l}</button>`)
           .join('')}
-        <button class="row-btn accent" data-act="add-subject">${ICON.plus}<span class="grow">הוספת מקצוע</span></button>
-      </div>`
-    )}
-
-    ${section(
-      'חיבורים',
-      `${webtopCard()}
-      <div class="card connect">
-        <div class="connect-head"><span class="logo gc" aria-hidden="true">GC</span><div><b>Google Classroom</b><br><span class="muted small">משימות, מבחנים וחומרים מהכיתות שלך · סנכרון אחרון: ${lastSync}</span></div></div>
-        <label class="field"><span class="field-label">Client ID</span>
-          <input data-setting="settings.clientId" value="${esc(clientId)}" placeholder="xxxx.apps.googleusercontent.com" dir="ltr" autocapitalize="off" spellcheck="false"></label>
-        ${connectedEmail() ? `<p class="small connected-as">${token ? 'מחובר/ת כ-' : 'חשבון אחרון: '}<bdi dir="ltr">${esc(connectedEmail())}</bdi></p>` : ''}
-        <button class="btn primary block" data-act="gc-sync" ${clientId ? '' : 'disabled'}>${ICON.sync} ${token ? 'סנכרון עכשיו' : 'התחברות לגוגל וסנכרון'}</button>
-        ${connectedEmail() || token ? `<button class="btn ghost block" data-act="gc-switch" ${clientId ? '' : 'disabled'}>החלפת חשבון גוגל</button>` : ''}
-        <details class="help">
-          <summary>איך מחברים? (פעם אחת, 5 דקות)</summary>
-          <ol>
-            <li>נכנסים ל-<a href="https://console.cloud.google.com/" target="_blank" rel="noopener">Google Cloud Console</a> עם החשבון שלך ויוצרים פרויקט חדש.</li>
-            <li>בחיפוש למעלה: <b>Google Classroom API</b> ← <b>Enable</b>.</li>
-            <li><b>OAuth consent screen</b> (או Google Auth Platform): סוג <b>External</b>, שם לאפליקציה, המייל שלך — ומוסיפים את עצמך תחת <b>Test users</b>.</li>
-            <li><b>Credentials ← Create credentials ← OAuth client ID</b>, סוג <b>Web application</b>.</li>
-            <li>תחת <b>Authorized JavaScript origins</b>: <code class="copy" data-act="copy" data-text="${esc(location.origin)}">${esc(location.origin)}</code></li>
-            <li>תחת <b>Authorized redirect URIs</b>: <code class="copy" data-act="copy" data-text="${esc(redirectURI())}">${esc(redirectURI())}</code></li>
-            <li>מעתיקים את ה-Client ID לשדה למעלה ולוחצים "התחברות".</li>
-          </ol>
-          <p class="muted small">לחיצה על כתובת מעתיקה אותה. בחשבון של בית ספר (Google Workspace for Education) מנהל המערכת יכול לחסום אפליקציות חיצוניות — ואז זה לא יעבוד עד שיאשרו. הנתונים נשארים רק בטלפון שלך.</p>
-        </details>
       </div>
-
-`
-    )}
-
-    ${section(
-      'גיבוי',
-      `<div class="card list">
-        <button class="row-btn" data-act="export">${ICON.share}<span class="grow">ייצוא גיבוי (קובץ)</span></button>
-        <label class="row-btn">${ICON.clip}<span class="grow">שחזור מגיבוי</span><input type="file" accept="application/json,.json" data-import hidden></label>
-        <button class="row-btn danger" data-act="reset">${ICON.trash}<span class="grow">מחיקת כל הנתונים</span></button>
+      <div class="accent-row" role="radiogroup" aria-label="צבע ראשי">
+        ${Object.entries(ACCENTS)
+          .map(([k, c]) => `<button class="accent-dot${ap.accent === k ? ' on' : ''}" role="radio" aria-checked="${ap.accent === k}" aria-label="${c.name}" data-act="set-accent" data-val="${k}" style="--dotc:${c.light}"></button>`)
+          .join('')}
       </div>
-      <p class="muted small pad">הכל נשמר רק במכשיר הזה${mode === 'idb' ? '' : mode === 'ls' ? ' (אחסון מוגבל)' : ' — <b>אחסון זמני בלבד בדפדפן הזה, הנתונים יימחקו בסגירה</b>'}. כדאי לייצא גיבוי מדי פעם (אפשר לשמור ב-iCloud Drive).</p>`
-    )}
+    </div>
+
+    <h3 class="group-title">מקצועות</h3>
+    <div class="card list">
+      ${d.subjects
+        .map(
+          (s) => `<button class="row-btn" data-act="edit-subject" data-id="${s.id}">
+            <span class="tile-ico" style="--tile:var(--c${s.color % 8})" aria-hidden="true">${ICON.book}</span><span class="grow">${esc(s.name)}</span>
+            ${s.classroomId ? '<span class="badge">Classroom</span>' : ''}${chev}</button>`
+        )
+        .join('')}
+      <button class="row-btn accent" data-act="add-subject"><span class="tile-ico t-gray" aria-hidden="true">${ICON.plus}</span><span class="grow">הוספת מקצוע</span></button>
+    </div>
+
+    <h3 class="group-title">חיבורים</h3>
+    ${webtopRows()}
+    <div class="card list">
+      <button class="row-btn" data-act="gc-open"><span class="tile-ico t-green" aria-hidden="true"><b class="tile-letter">G</b></span>
+        <span class="grow">Google Classroom<span class="sr-sub">${connectedEmail() ? `${token ? 'מחובר/ת' : 'חשבון אחרון'}: <bdi>${esc(connectedEmail())}</bdi>` : 'לחשבונות שמאפשרים חיבור'}</span></span>${chev}</button>
+    </div>
+
+    <h3 class="group-title">נתונים</h3>
+    <div class="card list">
+      <button class="row-btn" data-act="export">${tile('share', 'blue')}<span class="grow">ייצוא גיבוי</span>${chev}</button>
+      <label class="row-btn">${tile('cloud', 'indigo')}<span class="grow">שחזור מגיבוי</span>${chev}<input type="file" accept="application/json,.json" data-import hidden></label>
+      <button class="row-btn danger" data-act="reset">${tile('trash', 'red')}<span class="grow">מחיקת כל הנתונים</span></button>
+    </div>
+    <p class="card-foot">הכל נשמר רק במכשיר הזה${mode === 'idb' ? '' : mode === 'ls' ? ' (אחסון מוגבל)' : '. <b>זה אחסון זמני בלבד בדפדפן הזה, והנתונים יימחקו כשסוגרים אותו</b>'}. כדאי לייצא גיבוי מדי פעם, למשל ל-iCloud Drive.</p>
 
     ${
       isStandalone()
         ? ''
-        : section(
-            'התקנה באייפון',
-            `<div class="card"><ol class="steps">
-              <li>פותחים את האתר הזה ב<b>ספארי</b></li>
-              <li>לוחצים על כפתור השיתוף <span class="inline-ico">${ICON.share}</span></li>
-              <li>"<b>הוספה למסך הבית</b>" ← "הוספה"</li>
-            </ol></div>`
-          )
+        : `<h3 class="group-title">התקנה באייפון</h3>
+           <div class="card"><ol class="steps">
+             <li>פותחים את האתר הזה ב<b>ספארי</b></li>
+             <li>לוחצים על כפתור השיתוף <span class="inline-ico">${ICON.share}</span></li>
+             <li>"<b>הוספה למסך הבית</b>" ← "הוספה"</li>
+           </ol></div>`
     }
-    <p class="muted small center">הלימודים שלי · גרסה 1.0</p>
+    <p class="muted small center version">הלימודים שלי · גרסה 2.0</p>
   `;
+}
+
+/** Google Classroom settings, shown in a sheet. */
+export function classroomSheetHTML() {
+  const d = S.data;
+  const token = getToken();
+  const clientId = d.settings.clientId;
+  const lastSync = d.settings.lastSync ? fmtDateTime(d.settings.lastSync) : 'עוד לא';
+  return `<div class="sheet-head"><button type="button" class="link-btn" data-close>סגירה</button><h3>Google Classroom</h3><span></span></div>
+    <p class="muted small">משימות, מבחנים וחומרים מהכיתות שלך · סנכרון אחרון: ${lastSync}</p>
+    <label class="field"><span class="field-label">Client ID</span>
+      <input data-setting="settings.clientId" value="${esc(clientId)}" placeholder="xxxx.apps.googleusercontent.com" dir="ltr" autocapitalize="off" spellcheck="false"></label>
+    ${connectedEmail() ? `<p class="small connected-as">${token ? 'מחובר/ת כ-' : 'חשבון אחרון: '}<bdi dir="ltr">${esc(connectedEmail())}</bdi></p>` : ''}
+    <div class="actions-col tight">
+      <button class="btn primary block" data-act="gc-sync" ${clientId ? '' : 'disabled'}>${ICON.sync} ${token ? 'סנכרון עכשיו' : 'התחברות לגוגל וסנכרון'}</button>
+      ${connectedEmail() || token ? `<button class="btn ghost block" data-act="gc-switch" ${clientId ? '' : 'disabled'}>החלפת חשבון גוגל</button>` : ''}
+    </div>
+    <details class="help">
+      <summary>איך מחברים? (פעם אחת, 5 דקות)</summary>
+      <ol>
+        <li>נכנסים ל-<a href="https://console.cloud.google.com/" target="_blank" rel="noopener">Google Cloud Console</a> ויוצרים פרויקט.</li>
+        <li>מפעילים את <b>Google Classroom API</b>.</li>
+        <li><b>Google Auth Platform</b>: סוג <b>External</b>, ומוסיפים את המייל שלך תחת <b>Test users</b>.</li>
+        <li><b>Clients ← Create client ← Web application</b>.</li>
+        <li><b>Authorized JavaScript origins</b>: <code class="copy" data-act="copy" data-text="${esc(location.origin)}">${esc(location.origin)}</code></li>
+        <li><b>Authorized redirect URIs</b>: <code class="copy" data-act="copy" data-text="${esc(redirectURI())}">${esc(redirectURI())}</code></li>
+        <li>מעתיקים את ה-Client ID לשדה למעלה.</li>
+      </ol>
+      <p class="muted small">לחיצה על כתובת מעתיקה אותה. בחשבון של בית ספר, מנהל המערכת יכול לחסום אפליקציות חיצוניות.</p>
+    </details>`;
 }
 
 export function notFound(back) {

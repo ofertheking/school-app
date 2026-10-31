@@ -30,6 +30,7 @@ function defaults() {
       lastSync: null,
       installDismissed: false,
       webtop: { url: '', user: '', pass: '', lastSync: null, name: '' },
+      appearance: { theme: 'system', accent: 'blue' },
     },
     timer: null,
   };
@@ -52,6 +53,9 @@ export const S = {
     review: null,
     reviewReverse: false,
     webtopShape: '',
+    q: '',
+    calMonth: '',
+    calDay: '',
   },
 };
 
@@ -67,6 +71,7 @@ export function migrate(saved) {
   out.profile = { ...d.profile, ...(saved.profile || {}) };
   out.settings = { ...d.settings, ...(saved.settings || {}) };
   out.settings.webtop = { ...d.settings.webtop, ...(saved.settings?.webtop || {}) };
+  out.settings.appearance = { ...d.settings.appearance, ...(saved.settings?.appearance || {}) };
   for (const k of ['subjects', 'exams', 'tasks', 'sessions', 'items', 'lessons', 'decks', 'cards']) {
     if (!Array.isArray(out[k])) out[k] = [];
   }

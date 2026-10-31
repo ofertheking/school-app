@@ -62,9 +62,9 @@ export function todaySection() {
   if (!S.data.lessons.length) return '';
   const day = new Date().getDay();
   const list = lessonsOn(day);
-  const more = `<button class="link-btn" data-go="#schedule">כל המערכת</button>`;
-  if (!list.length) return section('היום במערכת', `<div class="card muted small">אין שיעורים היום 🙌</div>`, more);
-  return section('היום במערכת', `<div class="card list">${list.map((l) => lessonRow(l, list)).join('')}</div>`, more);
+  const headRow = `<button class="sum-head today-head" data-go="#schedule">${ICON.calendar} היום במערכת <span class="chev">${ICON.fwd}</span></button>`;
+  if (!list.length) return `<div class="card today-card">${headRow}<p class="muted today-empty">אין שיעורים היום 🙌</p></div>`;
+  return `<div class="card list today-card">${headRow}${list.map((l) => lessonRow(l, list)).join('')}</div>`;
 }
 
 export function schedulePage() {

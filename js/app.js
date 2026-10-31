@@ -20,6 +20,9 @@ import * as Importer from './importer.js';
 import * as Webtop from './webtop.js';
 import * as Files from './files.js';
 import * as Notebooks from './notebooks.js';
+import * as Search from './search.js';
+import * as Calendar from './calendar.js';
+import { applyAppearance } from './appearance.js';
 import { ICON } from './icons.js';
 import {
   consumeOAuthRedirect, getToken, forgetToken, startClassroomLogin, syncClassroom,
@@ -53,7 +56,7 @@ function cleanupEmptyItem(r) {
 const TAB_OF = {
   home: 'home', exams: 'exams', exam: 'exams', tasks: 'tasks', study: 'study', library: 'library',
   item: 'library', subject: 'home', more: 'more', schedule: 'home', deck: 'study', review: 'study',
-  notebook: 'library',
+  notebook: 'library', search: 'home',
 };
 
 function render() {
@@ -77,6 +80,7 @@ function render() {
       deck: () => Cards.deckPage(id),
       review: Cards.reviewPage,
       notebook: () => Notebooks.notebookPage(id),
+      search: Search.searchPage,
     }[name] || V.home;
   if (currentRoute === 'review' && r !== 'review') Cards.onLeaveReview();
   view.innerHTML = html();
@@ -88,10 +92,26 @@ function render() {
   });
   view.querySelectorAll('textarea.autosize').forEach(autosize);
   hydrateFiles(view);
+  watchLargeTitle();
   if (r !== currentRoute) {
     window.scrollTo(0, 0);
     currentRoute = r;
   }
+}
+
+let titleObserver = null;
+function watchLargeTitle() {
+  titleObserver?.disconnect();
+  const t = view.querySelector('.large-title');
+  if (!t || !t.textContent.trim() || !('IntersectionObserver' in window)) {
+    document.body.classList.toggle('nav-compact', !!view.querySelector('.editor') && window.scrollY > 10);
+    return;
+  }
+  titleObserver = new IntersectionObserver(
+    ([e]) => document.body.classList.toggle('nav-compact', !e.isIntersecting),
+    { rootMargin: '-60px 0px 0px 0px' }
+  );
+  titleObserver.observe(t);
 }
 
 function autosize(el) {
@@ -156,11 +176,11 @@ setInterval(() => {
 
 // ---------------------------------------------------------------- forms
 
-function examForm(e, presetSubject) {
+function examForm(e, presetSubject, presetDate = '') {
   const isNew = !e;
   formSheet({
     title: isNew ? 'מבחן חדש' : 'עריכת מבחן',
-    values: e || { subjectId: presetSubject || '', type: 'מבחן', date: '' },
+    values: e || { subjectId: presetSubject || '', type: 'מבחן', date: presetDate || '' },
     fields: [
       { name: 'subjectId', label: 'מקצוע', type: 'subject' },
       { name: 'title', label: 'נושא / שם', placeholder: 'למשל: טריגונומטריה, פרקים 1–4' },
@@ -545,6 +565,7 @@ async function importBackup(file) {
   S.data = migrate(p.data);
   if (keepWebtop?.pass) S.data.settings.webtop = keepWebtop;
   saveNow();
+  applyAppearance();
   render();
   toast('השחזור הושלם ✔︎');
 }
@@ -553,6 +574,23 @@ async function importBackup(file) {
 
 const ACTIONS = {
   'go-more': () => navigate('#more'),
+  'go-search'() {
+    navigate('#search');
+    setTimeout(() => view.querySelector('[data-input="global-search"]')?.focus(), 60);
+  },
+  'set-theme'({ val }) {
+    S.data.settings.appearance = { ...S.data.settings.appearance, theme: val };
+    save();
+    applyAppearance();
+    render();
+  },
+  'set-accent'({ val }) {
+    S.data.settings.appearance = { ...S.data.settings.appearance, accent: val };
+    save();
+    applyAppearance();
+    render();
+  },
+  'gc-open': () => openSheet(V.classroomSheetHTML(), { tall: true }),
   seg({ key, val }) {
     S.ui[key] = val;
     render();
@@ -591,7 +629,7 @@ const ACTIONS = {
   },
 
   // exams
-  'add-exam': ({ subject: sid }) => examForm(null, sid),
+  'add-exam': ({ subject: sid, date }) => examForm(null, sid, date),
   'edit-exam': ({ id }) => examForm(exam(id)),
   async 'del-exam'({ id }) {
     if (!(await askConfirm('למחוק את המבחן?'))) return;
@@ -807,12 +845,13 @@ const ACTIONS = {
     await clearAll();
     S.data = migrate(null);
     saveNow();
+    applyAppearance();
     navigate('#home');
     toast('הכל נמחק');
   },
 };
 
-Object.assign(ACTIONS, Sched.actions, Cards.actions, Importer.actions, Webtop.actions, Files.actions, Notebooks.actions, {
+Object.assign(ACTIONS, Sched.actions, Cards.actions, Importer.actions, Webtop.actions, Files.actions, Notebooks.actions, Search.actions, Calendar.actions, {
   'exam-link-items'({ id }) {
     const e = exam(id);
     const chosen = new Set(e.itemIds || []);
@@ -893,6 +932,10 @@ document.addEventListener('input', (e) => {
   const el = e.target;
   if (el.matches('textarea.autosize')) autosize(el);
   if (el.dataset.bind && el.tagName !== 'SELECT') applyBind(el);
+  if (el.dataset.input === 'global-search') {
+    S.ui.q = el.value;
+    document.getElementById('search-results').innerHTML = Search.searchResults(el.value);
+  }
   if (el.dataset.input === 'lib-query') {
     S.ui.libQuery = el.value;
     const list = document.getElementById('lib-list');
@@ -986,6 +1029,15 @@ function handleOAuthReturn() {
   return oauth;
 }
 
+// Screens without a large title (the editor) still get the blurred bar once scrolled.
+window.addEventListener(
+  'scroll',
+  () => {
+    if (!view.querySelector('.large-title:not(:empty)')) document.body.classList.toggle('nav-compact', window.scrollY > 10);
+  },
+  { passive: true }
+);
+
 window.addEventListener('hashchange', () => {
   if (handleOAuthReturn()) return; // hash was rewritten to #more → another hashchange renders
   closeAllSheets();
@@ -1006,6 +1058,7 @@ hooks.navigate = navigate;
 async function boot() {
   await initStore();
   await load();
+  applyAppearance();
   const hadOAuth = /(^#|&)(access_token|error)=/.test(location.hash);
   if (hadOAuth) {
     render(); // paint first, then consume (replaceState doesn't fire hashchange)
