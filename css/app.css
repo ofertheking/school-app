@@ -745,3 +745,17 @@ textarea.plain { width: 100%; border: 0; background: transparent; resize: none; 
 @media (forced-colors: active) {
   .c-bar, .meter-fill, .hbar-fill, .ring-fill { forced-color-adjust: none; }
 }
+
+/* ---------- phone in landscape: compact chrome so content has room ---------- */
+@media (orientation: landscape) and (max-height: 500px) {
+  :root { --tabbar-h: 40px; }
+  .tab { flex-direction: row; gap: 6px; font-size: 13px; }
+  .tab svg { width: 21px; height: 21px; }
+  .head-bar { min-height: 36px; }
+  .large-title { font-size: 24px; }
+  .subtitle { font-size: 13px; }
+  .section { margin-top: 16px; }
+  .timer-clock { font-size: 48px; }
+  .hero-num { font-size: 40px; }
+  .countdown { padding: 10px; }
+}
