@@ -1,7 +1,7 @@
 // Boot, routing, event wiring and all user actions.
 import {
   S, load, save, saveNow, migrate, subject, exam, task, item, nextColor, timerElapsed,
-  subjectName, EXAM_TYPES,
+  subjectName, EXAM_TYPES, createItem, deck,
 } from './core.js';
 import { initStore, putFile, getFile, deleteFile, clearAll } from './store.js';
 import {
@@ -13,6 +13,11 @@ import {
   shareOrDownload, subjectOptions,
 } from './ui.js';
 import * as V from './views.js';
+import { hooks } from './router.js';
+import * as Sched from './schedule.js';
+import * as Cards from './flashcards.js';
+import * as Importer from './importer.js';
+import * as Webtop from './webtop.js';
 import { ICON } from './icons.js';
 import {
   consumeOAuthRedirect, getToken, forgetToken, startClassroomLogin, syncClassroom,
@@ -43,7 +48,10 @@ function cleanupEmptyItem(r) {
   lastItemId = r.startsWith('item-') ? r.slice(5) : null;
 }
 
-const TAB_OF = { home: 'home', exams: 'exams', exam: 'exams', tasks: 'tasks', study: 'study', library: 'library', item: 'library', subject: 'home', more: 'more' };
+const TAB_OF = {
+  home: 'home', exams: 'exams', exam: 'exams', tasks: 'tasks', study: 'study', library: 'library',
+  item: 'library', subject: 'home', more: 'more', schedule: 'home', deck: 'study', review: 'study',
+};
 
 function render() {
   const r = routeName();
@@ -62,7 +70,11 @@ function render() {
       exam: () => V.examDetail(id),
       item: () => V.itemDetail(id),
       subject: () => V.subjectDetail(id),
+      schedule: Sched.schedulePage,
+      deck: () => Cards.deckPage(id),
+      review: Cards.reviewPage,
     }[name] || V.home;
+  if (currentRoute === 'review' && r !== 'review') Cards.onLeaveReview();
   view.innerHTML = html();
   const tab = TAB_OF[name] || 'home';
   document.querySelectorAll('.tab').forEach((b) => {
@@ -175,7 +187,7 @@ function examForm(e, presetSubject) {
 
 const splitLines = (s) => String(s || '').split(/\r?\n/).map((x) => x.replace(/^[\s•\-*\d.)]+/, '').trim()).filter(Boolean);
 
-function taskForm(t, presetSubject) {
+function taskForm(t, presetSubject, presetDue = '') {
   const isNew = !t;
   const footer = isNew
     ? ''
@@ -185,7 +197,7 @@ function taskForm(t, presetSubject) {
       </div>`;
   formSheet({
     title: isNew ? 'משימה חדשה' : 'עריכת משימה',
-    values: t || { subjectId: presetSubject || '', due: '' },
+    values: t || { subjectId: presetSubject || '', due: presetDue || '' },
     fields: [
       { name: 'title', label: 'מה צריך לעשות?', required: true, placeholder: 'למשל: תרגילים 1–10 עמ׳ 45' },
       { name: 'subjectId', label: 'מקצוע', type: 'subject' },
@@ -290,13 +302,31 @@ function calendarSheet(e) {
 // ---------------------------------------------------------------- library
 
 function newItem(subjectId, extra = {}) {
-  const it = {
-    id: uid(), subjectId: subjectId ?? S.ui.libSubject ?? '', title: '', body: '', url: '', files: [],
-    pinned: false, source: 'manual', createdAt: Date.now(), updatedAt: Date.now(), ...extra,
-  };
-  S.data.items.push(it);
-  save();
-  return it;
+  return createItem({ subjectId: subjectId ?? S.ui.libSubject ?? '', ...extra });
+}
+
+function newLessonNote(subjectId, date) {
+  const it = newItem(subjectId || '', {
+    lessonDate: date,
+    title: `שיעור ${subjectId ? subjectName(subjectId) : ''} · ${date.slice(8, 10).replace(/^0/, '')}/${date.slice(5, 7).replace(/^0/, '')}`.replace('שיעור  ·', 'שיעור ·'),
+  });
+  navigate(`#item-${it.id}`);
+  setTimeout(() => view.querySelector('.editor-body')?.focus(), 80);
+}
+
+function lessonNoteForm(presetSubject) {
+  formSheet({
+    title: 'סיכום שיעור',
+    submitLabel: 'התחלה',
+    values: { subjectId: presetSubject || S.ui.libSubject || '', date: isoDate() },
+    fields: [
+      { name: 'subjectId', label: 'מקצוע', type: 'subject' },
+      { name: 'date', label: 'תאריך השיעור', type: 'date', required: true },
+    ],
+    onSubmit(v) {
+      setTimeout(() => newLessonNote(v.subjectId, v.date), 280);
+    },
+  });
 }
 
 async function attachFiles(itemId, fileList) {
@@ -324,9 +354,11 @@ function addItemSheet(subjectId) {
     `<h3 class="sheet-title">מה מוסיפים?</h3>
      <div class="choice-list">
        <button class="choice" data-k="note"><span class="choice-icon">${ICON.note}</span><span class="choice-body"><b>סיכום</b><small>כתיבת סיכום או הערות</small></span></button>
+       <button class="choice" data-k-lesson><span class="choice-icon">${ICON.calendar}</span><span class="choice-body"><b>סיכום שיעור</b><small>מה למדנו היום בשיעור</small></span></button>
        <label class="choice"><input type="file" accept="image/*,application/pdf,.doc,.docx,.ppt,.pptx,.txt" multiple hidden data-k-file>
          <span class="choice-icon">${ICON.camera}</span><span class="choice-body"><b>צילום או קובץ</b><small>צילום מחברת, דף עבודה, PDF</small></span></label>
        <button class="choice" data-k="link"><span class="choice-icon">${ICON.link}</span><span class="choice-body"><b>קישור</b><small>Drive, YouTube, אתר</small></span></button>
+       <button class="choice" data-k-import><span class="choice-icon">${ICON.share}</span><span class="choice-body"><b>ייבוא מאפליקציה אחרת</b><small>Notes, Google Docs, Quizlet, קובץ טקסט</small></span></button>
      </div>
      <button class="btn ghost block" data-close>ביטול</button>`,
     {
@@ -339,6 +371,14 @@ function addItemSheet(subjectId) {
             setTimeout(() => view.querySelector(b.dataset.k === 'link' ? '.url-field input' : '.editor-title')?.focus(), 80);
           })
         );
+        sheet.querySelector('[data-k-lesson]').addEventListener('click', () => {
+          close();
+          setTimeout(() => lessonNoteForm(subjectId), 280);
+        });
+        sheet.querySelector('[data-k-import]').addEventListener('click', () => {
+          close();
+          setTimeout(() => Importer.openImportSheet({ mode: 'note', subjectId }), 280);
+        });
         sheet.querySelector('[data-k-file]').addEventListener('change', async (ev) => {
           const files = [...ev.target.files];
           if (!files.length) return;
@@ -476,7 +516,9 @@ async function exportBackup() {
       if (b) files[f.id] = await blobToDataURL(b);
     }
   }
-  const payload = { app: 'school-app', version: 1, exportedAt: new Date().toISOString(), data: S.data, files };
+  const data = JSON.parse(JSON.stringify(S.data));
+  if (data.settings?.webtop) data.settings.webtop.pass = '';
+  const payload = { app: 'school-app', version: 1, exportedAt: new Date().toISOString(), data, files };
   const file = new File([JSON.stringify(payload)], `school-backup-${isoDate()}.json`, { type: 'application/json' });
   await shareOrDownload(file);
 }
@@ -496,7 +538,9 @@ async function importBackup(file) {
   if (!(await askConfirm('לשחזר מהגיבוי?', { ok: 'שחזור', danger: false, detail: 'כל מה שיש עכשיו באפליקציה יוחלף בתוכן הגיבוי.' }))) return;
   await clearAll();
   for (const [id, url] of Object.entries(p.files || {})) await putFile(id, dataURLToBlob(url));
+  const keepWebtop = S.data.settings.webtop;
   S.data = migrate(p.data);
+  if (keepWebtop?.pass) S.data.settings.webtop = keepWebtop;
   saveNow();
   render();
   toast('השחזור הושלם ✔︎');
@@ -579,7 +623,9 @@ const ACTIONS = {
   },
 
   // tasks
-  'add-task': ({ subject: sid }) => taskForm(null, sid),
+  'add-task': ({ subject: sid, due }) => setTimeout(() => taskForm(null, sid, due), document.querySelector('.sheet-wrap') ? 280 : 0),
+  'new-lesson-note': ({ subject: sid, date }) => newLessonNote(sid, date || isoDate()),
+  'lesson-note-form': ({ subject: sid }) => lessonNoteForm(sid),
   'edit-task': ({ id }) => taskForm(task(id)),
   'task-toggle'({ id }) {
     const t = task(id);
@@ -773,6 +819,8 @@ const ACTIONS = {
   },
 };
 
+Object.assign(ACTIONS, Sched.actions, Cards.actions, Importer.actions, Webtop.actions);
+
 // ---------------------------------------------------------------- events
 
 document.addEventListener('click', (e) => {
@@ -827,6 +875,7 @@ document.addEventListener('input', (e) => {
 
 document.addEventListener('change', async (e) => {
   const el = e.target;
+  if (el.dataset.uiToggle) S.ui[el.dataset.uiToggle] = el.checked;
   if (el.dataset.bind && el.tagName === 'SELECT') {
     applyBind(el);
     render();
@@ -853,6 +902,16 @@ document.addEventListener('change', async (e) => {
 
 document.addEventListener('submit', (e) => {
   const f = e.target;
+  if (f.dataset.form === 'card') {
+    e.preventDefault();
+    const front = f.elements.front.value.trim();
+    const back = f.elements.back.value.trim();
+    if (!front || !back) return toast('צריך למלא את שני הצדדים');
+    Cards.addCards(f.dataset.id, [{ front, back }]);
+    render();
+    view.querySelector('.add-card textarea[name=front]')?.focus();
+    return;
+  }
   if (f.dataset.form !== 'topic') return;
   e.preventDefault();
   const ex = exam(f.dataset.id);
@@ -866,9 +925,13 @@ document.addEventListener('submit', (e) => {
 
 // Enter (without shift) in the topic box adds the topic.
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && !e.shiftKey && e.target.closest?.('.add-topic textarea')) {
+  if (e.key !== 'Enter' || e.shiftKey) return;
+  if (e.target.closest?.('.add-topic textarea') || e.target.matches?.('.add-card textarea[name=back]')) {
     e.preventDefault();
     e.target.form.requestSubmit();
+  } else if (e.target.matches?.('.add-card textarea[name=front]')) {
+    e.preventDefault();
+    e.target.form.elements.back.focus();
   }
 });
 
@@ -893,6 +956,9 @@ document.addEventListener('visibilitychange', () => {
   else if (!document.querySelector('.sheet-wrap') && !document.activeElement?.matches('input,textarea,select')) render();
 });
 window.addEventListener('pagehide', () => saveNow());
+
+hooks.render = render;
+hooks.navigate = navigate;
 
 // ---------------------------------------------------------------- boot
 

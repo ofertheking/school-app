@@ -746,6 +746,87 @@ textarea.plain { width: 100%; border: 0; background: transparent; resize: none; 
   .c-bar, .meter-fill, .hbar-fill, .ring-fill { forced-color-adjust: none; }
 }
 
+/* ---------- timetable ---------- */
+.day-chips { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin-bottom: 6px; }
+.day-chip {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  min-height: 52px; border-radius: 12px; background: var(--card); box-shadow: var(--shadow);
+  font-size: 17px; position: relative;
+}
+.day-chip small { font-size: 11px; color: var(--muted); min-height: 14px; }
+.day-chip.today b { color: var(--accent-text); }
+.day-chip.on { background: var(--accent); color: #fff; }
+.day-chip.on small, .day-chip.on.today b { color: rgba(255, 255, 255, 0.85); }
+.day-title { font-size: 20px; margin: 16px 4px 8px; }
+.lesson-row { display: flex; align-items: stretch; gap: 10px; width: 100%; padding: 10px 14px 10px 16px; min-height: 56px; }
+.lesson-row:active { background: var(--fill); }
+.lesson-row .stripe { width: 4px; border-radius: 2px; }
+.lesson-num { width: 18px; align-self: center; text-align: center; font-weight: 700; color: var(--muted); font-variant-numeric: tabular-nums; }
+.lesson-body { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 2px; }
+.lesson-title { font-weight: 600; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.lesson-meta { font-size: 13px; color: var(--muted); }
+.lesson-row.now { background: var(--accent-tint); }
+.lesson-row.done .lesson-title, .lesson-row.done .lesson-num { color: var(--muted); }
+.lesson-sheet { text-align: center; margin-bottom: 12px; }
+.lesson-sheet h3 { margin: 6px 0 2px; font-size: 20px; }
+.lesson-sheet p { margin: 0; }
+.center-row { justify-content: center; }
+
+/* ---------- flashcards ---------- */
+.stripe.tall { align-self: stretch; width: 4px; border-radius: 2px; min-height: 36px; }
+.deck-list { margin-top: 12px; }
+.deck-study { display: flex; flex-direction: column; gap: 10px; }
+.toggle-row { display: flex; align-items: center; gap: 8px; font-size: 15px; color: var(--text-2); }
+.toggle-row input { width: 20px; height: 20px; accent-color: var(--accent); }
+.add-card { display: flex; flex-direction: column; gap: 8px; }
+.add-card textarea {
+  width: 100%; min-height: 46px; border: 0; border-radius: 11px; background: var(--fill);
+  padding: 11px 12px; font-size: 17px; resize: none; outline: none; line-height: 1.4;
+}
+.add-card textarea:focus { box-shadow: 0 0 0 2px var(--accent); }
+.card-row { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; width: 100%; padding: 10px 16px; text-align: start; }
+.card-row:active { background: var(--fill); }
+.cr-front { font-weight: 600; overflow-wrap: anywhere; }
+.cr-back { grid-column: 1; color: var(--text-2); font-size: 14px; overflow-wrap: anywhere; }
+.box-dots { grid-column: 2; grid-row: 1 / span 2; align-self: center; font-size: 8px; letter-spacing: 1px; color: var(--accent); direction: ltr; }
+.review-progress { display: flex; align-items: center; gap: 10px; margin: 4px 0 14px; }
+.review-progress .meter { flex: 1; }
+.flashcard {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+  width: 100%; min-height: 46vh; padding: 28px 20px; margin-bottom: 14px;
+  background: var(--card); border-radius: 22px; box-shadow: 0 2px 16px rgba(0, 0, 0, 0.08);
+  text-align: center; transition: transform 0.15s ease;
+}
+.flashcard:active { transform: scale(0.98); }
+.flashcard.flipped { background: var(--accent-tint); }
+.fc-side { font-size: 13px; font-weight: 700; color: var(--muted); letter-spacing: 0.02em; }
+.fc-text { font-weight: 650; line-height: 1.35; overflow-wrap: anywhere; white-space: pre-wrap; }
+.fc-text.lg { font-size: 30px; }
+.fc-text.md { font-size: 22px; }
+.fc-text.sm { font-size: 17px; font-weight: 500; }
+.fc-q { max-width: 90%; }
+.review-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.review-btns .btn { min-height: 58px; font-size: 18px; border-radius: 16px; }
+.review-no { background: var(--danger-tint); color: var(--danger); }
+.review-yes { background: var(--good-tint); color: var(--good-text); }
+.review-done { text-align: center; padding: 24px 18px; display: flex; flex-direction: column; gap: 10px; }
+.review-done h2 { margin: 0; }
+.review-done p { margin: 0; }
+.lesson-chip { align-self: flex-start; gap: 5px; }
+.lesson-chip svg { width: 15px; height: 15px; }
+
+.head-note { max-width: 60vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--muted); font-size: 14px; align-self: center; }
+
+/* ---------- import / setup sheets ---------- */
+.tips { margin: 0 0 8px; padding-inline-start: 18px; font-size: 14px; color: var(--text-2); display: flex; flex-direction: column; gap: 4px; }
+.tips code, .setup-steps code { direction: ltr; unicode-bidi: isolate; background: var(--fill); border-radius: 5px; padding: 0 5px; }
+.imp-status { min-height: 18px; margin: 8px 2px; }
+.imp-fields { margin-bottom: 14px; }
+.setup-steps { padding-inline-start: 20px; margin: 10px 0 14px; display: flex; flex-direction: column; gap: 12px; font-size: 15px; }
+.setup-steps .btn { margin-top: 6px; }
+.setup-steps details { margin-top: 6px; }
+.worker-code { width: 100%; font: 11px/1.4 ui-monospace, Menlo, monospace; border: 0; border-radius: 10px; background: var(--fill); padding: 8px; margin-top: 6px; }
+
 /* ---------- phone in landscape: compact chrome so content has room ---------- */
 @media (orientation: landscape) and (max-height: 500px) {
   :root { --tabbar-h: 40px; }

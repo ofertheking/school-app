@@ -12,48 +12,16 @@ import { weekChart, subjectBars, meter, ring } from './charts.js';
 import { ICON } from './icons.js';
 import { getToken, redirectURI, connectedEmail } from './integrations.js';
 import { storageMode } from './store.js';
+import { head, iconBtn, section, empty, seg, dot, subjectChip } from './components.js';
+import { todaySection } from './schedule.js';
+import { decksList } from './flashcards.js';
+import { webtopCard } from './webtop.js';
 
 // ---------- shared bits ----------
-
-function head(title, { back, actions = '', sub = '' } = {}) {
-  return `<header class="page-head">
-    <div class="head-bar">
-      ${back ? `<button class="icon-btn back" data-go="${back}" aria-label="חזרה">${ICON.back}<span>חזרה</span></button>` : '<span></span>'}
-      <div class="head-actions">${actions}</div>
-    </div>
-    <h1 class="large-title">${esc(title)}</h1>
-    ${sub ? `<p class="subtitle">${sub}</p>` : ''}
-  </header>`;
-}
-
-const iconBtn = (act, icon, label, data = '') =>
-  `<button class="icon-btn" data-act="${act}" aria-label="${esc(label)}" ${data}>${icon}</button>`;
-
-const section = (title, body, more = '') =>
-  `<section class="section"><div class="section-head"><h2>${esc(title)}</h2>${more}</div>${body}</section>`;
-
-const empty = (emoji, text, cta = '') =>
-  `<div class="empty"><div class="empty-emoji" aria-hidden="true">${emoji}</div><p>${text}</p>${cta}</div>`;
-
-function seg(key, options) {
-  return `<div class="seg" role="tablist">${options
-    .map(
-      ([val, label]) =>
-        `<button role="tab" class="seg-btn${S.ui[key] === val ? ' on' : ''}" aria-selected="${S.ui[key] === val}" data-act="seg" data-key="${key}" data-val="${val}">${esc(label)}</button>`
-    )
-    .join('')}</div>`;
-}
 
 function statVal(min) {
   const { value, unit } = fmtMinShort(min);
   return `<span class="stat-value"><bdi>${value}</bdi> <small>${unit}</small></span>`;
-}
-
-const dot = (subjectId) => `<span class="dot" style="background:${subjectColor(subjectId)}"></span>`;
-
-function subjectChip(s, { act = '', on = false, data = '' } = {}) {
-  return `<button class="chip-btn${on ? ' on' : ''}" ${act ? `data-act="${act}"` : `data-go="#subject-${s.id}"`} data-id="${s.id}" ${data}>
-    <span class="dot" style="background:var(--c${s.color % 8})"></span>${esc(s.name)}</button>`;
 }
 
 export function examCard(e) {
@@ -178,6 +146,7 @@ export function home() {
     ${timerBanner()}
     ${stats}
     ${quick}
+    ${todaySection()}
     ${section(
       'מבחנים קרובים',
       exams.length ? `<div class="stack">${exams.map(examCard).join('')}</div>` : empty('🎉', 'אין מבחנים קרובים', `<button class="btn tinted" data-act="add-exam">＋ הוספת מבחן</button>`),
@@ -188,6 +157,7 @@ export function home() {
       tasks.length ? `<div class="card list">${tasks.map(taskRow).join('')}</div>` : empty('✅', 'אין משימות פתוחות'),
       `<button class="link-btn" data-go="#tasks">הכל</button>`
     )}
+    ${d.lessons.length ? '' : `<button class="card row-btn" data-go="#schedule">${ICON.calendar}<span class="grow"><b>מערכת שעות</b><br><span class="muted small">להוסיף את המערכת או לייבא מוובטופ</span></span><span class="chev">${ICON.fwd}</span></button>`}
     ${
       d.subjects.length
         ? section('המקצועות שלי', `<div class="chip-scroll">${d.subjects.map((s) => subjectChip(s)).join('')}<button class="chip-btn add" data-act="add-subject">＋</button></div>`)
@@ -328,6 +298,10 @@ export function tasks() {
 // ---------- STUDY ----------
 
 export function study() {
+  const segCtl = seg('studySeg', [['timer', 'טיימר ושעות'], ['cards', 'כרטיסיות']]);
+  if (S.ui.studySeg === 'cards') {
+    return `${head('למידה')}${segCtl}${decksList()}`;
+  }
   const t = S.data.timer;
   const subs = S.data.subjects;
   let timerCard;
@@ -368,7 +342,8 @@ export function study() {
   const recent = [...S.data.sessions].sort((a, b) => b.start - a.start).slice(0, 12);
 
   return `
-    ${head('שעות למידה', { actions: iconBtn('add-session', ICON.plus, 'הוספת זמן ידנית') })}
+    ${head('למידה', { actions: iconBtn('add-session', ICON.plus, 'הוספת זמן ידנית') })}
+    ${segCtl}
     ${timerCard}
     ${section(
       `שעות למידה · ${rangeLabel}`,
@@ -410,7 +385,7 @@ export function libraryItems() {
     .sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || (b.updatedAt || 0) - (a.updatedAt || 0));
 }
 
-const KIND_ICON = { note: ICON.note, file: ICON.clip, link: ICON.link };
+const KIND_ICON = { note: ICON.note, lesson: ICON.calendar, file: ICON.clip, link: ICON.link };
 
 export function libraryList() {
   const list = libraryItems();
@@ -437,7 +412,7 @@ export function libraryList() {
 }
 
 export function library() {
-  const kinds = [['all', 'הכל'], ['note', 'סיכומים'], ['file', 'קבצים ותמונות'], ['link', 'קישורים']];
+  const kinds = [['all', 'הכל'], ['note', 'סיכומים'], ['lesson', 'סיכומי שיעור'], ['file', 'קבצים ותמונות'], ['link', 'קישורים']];
   return `
     ${head('חומר וסיכומים', { actions: iconBtn('add-item', ICON.plus, 'הוספת חומר') })}
     <label class="search"><span aria-hidden="true">${ICON.search}</span>
@@ -484,7 +459,9 @@ export function itemDetail(id) {
         ${it.url ? `<a class="btn tinted sm" href="${esc(it.url)}" target="_blank" rel="noopener">פתיחה</a>` : ''}
       </label>
       ${(it.extraLinks || []).length > 1 ? `<div class="extra-links">${it.extraLinks.map((l) => `<a href="${esc(l.url)}" target="_blank" rel="noopener">${ICON.ext} ${esc(l.title || l.url)}</a>`).join('')}</div>` : ''}
-      <textarea class="editor-body autosize" data-bind="item:${it.id}:body" placeholder="כותבים כאן את הסיכום…">${esc(it.body || '')}</textarea>
+      ${it.lessonDate ? `<span class="chip cool lesson-chip">${ICON.calendar} סיכום שיעור · ${fmtDate(it.lessonDate)}</span>` : ''}
+      <textarea class="editor-body autosize" data-bind="item:${it.id}:body" placeholder="${it.lessonDate ? 'מה למדנו? מושגים, הסברים, מה המורה הדגיש/ה…\nטיפ: שורות בצורה "מושג - הגדרה" אפשר להפוך לכרטיסיות' : 'כותבים כאן את הסיכום…'}">${esc(it.body || '')}</textarea>
+      <button class="btn tinted block sm" data-act="note-to-cards" data-id="${it.id}">🃏 יצירת כרטיסיות מהסיכום</button>
 
       <div class="section-head"><h2>קבצים ותמונות</h2></div>
       <div class="files-grid">
@@ -582,7 +559,8 @@ export function more() {
 
     ${section(
       'חיבורים',
-      `<div class="card connect">
+      `${webtopCard()}
+      <div class="card connect">
         <div class="connect-head"><span class="logo gc" aria-hidden="true">GC</span><div><b>Google Classroom</b><br><span class="muted small">משימות, מבחנים וחומרים מהכיתות שלך · סנכרון אחרון: ${lastSync}</span></div></div>
         <label class="field"><span class="field-label">Client ID</span>
           <input data-setting="settings.clientId" value="${esc(clientId)}" placeholder="xxxx.apps.googleusercontent.com" dir="ltr" autocapitalize="off" spellcheck="false"></label>
@@ -604,20 +582,7 @@ export function more() {
         </details>
       </div>
 
-      <div class="card connect">
-        <div class="connect-head"><span class="logo wt" aria-hidden="true">W</span><div><b>וובטופ (Webtop)</b><br><span class="muted small">לוובטופ אין חיבור פתוח לאפליקציות, אז מייבאים בהעתק-הדבק</span></div></div>
-        <a class="btn ghost block" href="https://webtop.smartschool.co.il/" target="_blank" rel="noopener">${ICON.ext} פתיחת וובטופ</a>
-        <button class="btn primary block" data-act="webtop-paste">ייבוא מבחנים / משימות מהדבקה</button>
-        <details class="help">
-          <summary>איך זה עובד?</summary>
-          <ol>
-            <li>בוובטופ נכנסים ל<b>לוח מבחנים</b> (או שיעורי בית).</li>
-            <li>מסמנים את הטבלה (לחיצה ארוכה ← גרירה) ובוחרים <b>העתקה</b>.
-              <br><span class="muted small">באפליקציה של וובטופ אי אפשר לסמן? מצלמים מסך, פותחים את הצילום בתמונות, לוחצים על כפתור הטקסט (Live Text) ← "בחר הכל" ← העתקה.</span></li>
-            <li>חוזרים לכאן, לוחצים "ייבוא" ומדביקים. האפליקציה מזהה תאריכים ומקצועות, ואפשר לתקן לפני השמירה.</li>
-          </ol>
-        </details>
-      </div>`
+`
     )}
 
     ${section(

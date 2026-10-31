@@ -1,6 +1,6 @@
 // App state, persistence glue and read-only selectors.
 import { loadState, saveState } from './store.js';
-import { debounce, isoDate, parseISO, startOfDay, weekStart, addDays, daysUntil } from './util.js';
+import { debounce, isoDate, parseISO, startOfDay, weekStart, addDays, daysUntil, uid } from './util.js';
 
 export const COLOR_COUNT = 8;
 
@@ -20,12 +20,16 @@ function defaults() {
     tasks: [],
     sessions: [],
     items: [],
+    lessons: [],
+    decks: [],
+    cards: [],
     settings: {
       weeklyGoalH: 10,
       pomodoroMin: 25,
       clientId: '',
       lastSync: null,
       installDismissed: false,
+      webtop: { url: '', user: '', pass: '', lastSync: null, name: '' },
     },
     timer: null,
   };
@@ -42,6 +46,11 @@ export const S = {
     weekOffset: 0,
     timerSubject: '',
     timerMode: 'stopwatch',
+    studySeg: 'timer',
+    schedDay: null,
+    review: null,
+    reviewReverse: false,
+    webtopShape: '',
   },
 };
 
@@ -56,7 +65,8 @@ export function migrate(saved) {
   const out = { ...d, ...saved };
   out.profile = { ...d.profile, ...(saved.profile || {}) };
   out.settings = { ...d.settings, ...(saved.settings || {}) };
-  for (const k of ['subjects', 'exams', 'tasks', 'sessions', 'items']) {
+  out.settings.webtop = { ...d.settings.webtop, ...(saved.settings?.webtop || {}) };
+  for (const k of ['subjects', 'exams', 'tasks', 'sessions', 'items', 'lessons', 'decks', 'cards']) {
     if (!Array.isArray(out[k])) out[k] = [];
   }
   return out;
@@ -203,6 +213,7 @@ export function dueLabelGroup(due) {
 }
 
 export function itemKind(it) {
+  if (it.lessonDate) return 'lesson';
   if (it.body && it.body.trim()) return 'note';
   if (it.files && it.files.length) return 'file';
   if (it.url) return 'link';
@@ -210,3 +221,35 @@ export function itemKind(it) {
 }
 
 export const examDateObj = (e) => parseISO(e.date);
+
+/** Create a library item (summary / lesson note / file / link) and return it. */
+export function createItem(extra = {}) {
+  const it = {
+    id: uid(), subjectId: '', title: '', body: '', url: '', files: [], pinned: false,
+    source: 'manual', createdAt: Date.now(), updatedAt: Date.now(), ...extra,
+  };
+  S.data.items.push(it);
+  save();
+  return it;
+}
+
+/** Find a subject by (loose) name, or create it. */
+export function ensureSubject(name) {
+  const clean = String(name || '').trim();
+  if (!clean) return '';
+  const n = clean.toLowerCase().replace(/["'׳״`]/g, '').replace(/\s+/g, ' ');
+  const nm = (x) => x.toLowerCase().replace(/["'׳״`]/g, '').replace(/\s+/g, ' ');
+  const hit =
+    S.data.subjects.find((s) => nm(s.name) === n) ||
+    S.data.subjects.find((s) => n.includes(nm(s.name)) || nm(s.name).includes(n));
+  if (hit) return hit.id;
+  const s = { id: uid(), name: clean, color: nextColor() };
+  S.data.subjects.push(s);
+  return s.id;
+}
+
+// ---------- flashcards ----------
+export const deck = (id) => S.data.decks.find((d) => d.id === id);
+export const deckCards = (id) => S.data.cards.filter((c) => c.deckId === id);
+export const isDue = (c) => !c.due || c.due <= isoDate();
+export const dueCount = (id) => deckCards(id).filter(isDue).length;

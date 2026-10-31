@@ -4,6 +4,7 @@ import { esc, uid } from './util.js';
 import { getFile } from './store.js';
 
 const sheetRoot = () => document.getElementById('sheet-root');
+const openClosers = new Set();
 
 export function openSheet(html, { onMount, onClose, tall = false } = {}) {
   const wrap = document.createElement('div');
@@ -21,6 +22,7 @@ export function openSheet(html, { onMount, onClose, tall = false } = {}) {
   const close = () => {
     if (closed) return;
     closed = true;
+    openClosers.delete(close);
     wrap.classList.remove('open');
     setTimeout(() => {
       wrap.remove();
@@ -34,12 +36,13 @@ export function openSheet(html, { onMount, onClose, tall = false } = {}) {
       close();
     }
   });
+  openClosers.add(close);
   onMount?.(wrap.querySelector('.sheet'), close);
   return close;
 }
 
 export function closeAllSheets() {
-  sheetRoot().querySelectorAll('[data-close]').forEach((b) => b.click());
+  [...openClosers].forEach((close) => close());
 }
 
 export function toast(msg, ms = 2600) {
