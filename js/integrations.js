@@ -11,9 +11,11 @@ const SCOPES = [
   'https://www.googleapis.com/auth/classroom.courses.readonly',
   'https://www.googleapis.com/auth/classroom.coursework.me.readonly',
   'https://www.googleapis.com/auth/classroom.courseworkmaterials.readonly',
+  'https://www.googleapis.com/auth/classroom.profile.emails',
 ].join(' ');
 
 const TOKEN_KEY = 'gc-token';
+const EMAIL_KEY = 'gc-email';
 const STATE_KEY = 'gc-oauth-state';
 
 export const redirectURI = () => location.origin + location.pathname;
@@ -36,6 +38,9 @@ export function getToken() {
 export function forgetToken() {
   lsSet(TOKEN_KEY, null);
 }
+
+/** Email of the Google account last synced (shown in settings). */
+export const connectedEmail = () => lsGet(EMAIL_KEY) || '';
 
 export function startClassroomLogin(clientId) {
   const state = uid();
@@ -141,6 +146,13 @@ function matchSubjectForCourse(course) {
 /** Pull courses, assignments, exams and materials. Returns counters. */
 export async function syncClassroom(token, onProgress = () => {}) {
   const counts = { courses: 0, tasks: 0, exams: 0, items: 0 };
+  onProgress('מתחבר…');
+  try {
+    const me = await api('userProfiles/me', token);
+    lsSet(EMAIL_KEY, me.emailAddress || me.name?.fullName || '');
+  } catch (e) {
+    if (e.status === 401) throw e;
+  }
   onProgress('טוען כיתות…');
   const courses = await apiAll('courses', token, 'courses', { studentId: 'me', courseStates: 'ACTIVE' });
   counts.courses = courses.length;

@@ -10,7 +10,7 @@ import {
 } from './util.js';
 import { weekChart, subjectBars, meter, ring } from './charts.js';
 import { ICON } from './icons.js';
-import { getToken, redirectURI } from './integrations.js';
+import { getToken, redirectURI, connectedEmail } from './integrations.js';
 import { storageMode } from './store.js';
 
 // ---------- shared bits ----------
@@ -586,8 +586,9 @@ export function more() {
         <div class="connect-head"><span class="logo gc" aria-hidden="true">GC</span><div><b>Google Classroom</b><br><span class="muted small">משימות, מבחנים וחומרים מהכיתות שלך · סנכרון אחרון: ${lastSync}</span></div></div>
         <label class="field"><span class="field-label">Client ID</span>
           <input data-setting="settings.clientId" value="${esc(clientId)}" placeholder="xxxx.apps.googleusercontent.com" dir="ltr" autocapitalize="off" spellcheck="false"></label>
+        ${connectedEmail() ? `<p class="small connected-as">${token ? 'מחובר/ת כ-' : 'חשבון אחרון: '}<bdi dir="ltr">${esc(connectedEmail())}</bdi></p>` : ''}
         <button class="btn primary block" data-act="gc-sync" ${clientId ? '' : 'disabled'}>${ICON.sync} ${token ? 'סנכרון עכשיו' : 'התחברות לגוגל וסנכרון'}</button>
-        ${token ? `<button class="btn ghost block sm" data-act="gc-logout">התנתקות</button>` : ''}
+        ${connectedEmail() || token ? `<button class="btn ghost block" data-act="gc-switch" ${clientId ? '' : 'disabled'}>החלפת חשבון גוגל</button>` : ''}
         <details class="help">
           <summary>איך מחברים? (פעם אחת, 5 דקות)</summary>
           <ol>

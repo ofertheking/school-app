@@ -739,6 +739,13 @@ const ACTIONS = {
     }
     runClassroomSync(token);
   },
+  'gc-switch'() {
+    const cid = (S.data.settings.clientId || '').trim();
+    if (!cid) return toast('צריך להדביק Client ID קודם');
+    forgetToken();
+    saveNow();
+    startClassroomLogin(cid);
+  },
   'gc-logout'() {
     forgetToken();
     render();
@@ -902,7 +909,16 @@ async function boot() {
 
   if ('serviceWorker' in navigator) {
     try {
-      navigator.serviceWorker.register('sw.js').catch(() => {});
+      // When a new version finishes installing, reload once so it's used right away.
+      const hadController = !!navigator.serviceWorker.controller;
+      let reloaded = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (!hadController || reloaded || document.querySelector('.sheet-wrap')) return;
+        reloaded = true;
+        saveNow();
+        location.reload();
+      });
+      navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(() => {});
     } catch { /* sandboxed */ }
   }
 }
