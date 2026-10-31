@@ -41,10 +41,16 @@ export default {
     const { username, password, data = '+Aabe7FAdVluG6Lu+0ibrA==' } = body || {};
     if (!username || !password) return reply({ ok: false, error: 'missing_credentials' }, 400);
 
+    const where = (request.cf && request.cf.colo) || '';
     try {
-      return reply(await sync(username, password, data));
+      const result = await sync(username, password, data);
+      // Diagnostics only: never logs the username, password, token or any school data.
+      console.log(JSON.stringify({ step: 'sync', ok: result.ok, error: result.error || '', http: result.http || 200, colo: where,
+        hasClass: result.classCode != null, homework: !!result.homework, scheduleWeeks: (result.schedule || []).length }));
+      return reply({ ...result, colo: where });
     } catch (e) {
-      return reply({ ok: false, error: 'exception', message: String(e && e.message ? e.message : e) }, 502);
+      console.log(JSON.stringify({ step: 'exception', colo: where, message: String(e && e.message ? e.message : e).slice(0, 200) }));
+      return reply({ ok: false, error: 'exception', colo: where, message: String(e && e.message ? e.message : e) }, 502);
     }
   },
 };
@@ -55,7 +61,9 @@ async function call(path, payload, token) {
     headers: {
       'Content-Type': 'application/json; charset=utf-8',
       Accept: 'application/json, text/plain, */*',
-      'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148',
+      'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1',
+      Origin: 'https://webtop.smartschool.co.il',
+      Referer: 'https://webtop.smartschool.co.il/',
       ...(token ? { Cookie: `webToken=${token}` } : {}),
     },
     body: JSON.stringify(payload),
@@ -92,6 +100,10 @@ async function sync(username, password, data) {
     BiometricLogin: '',
   });
   const ld = login.json && login.json.data;
+  // Webtop sits behind AWS CloudFront, which rejects some server traffic with an HTML 403 page.
+  if (login.http === 403 && login.json.nonJson && /Request blocked|could not be satisfied/i.test(login.json.nonJson)) {
+    return { ok: false, error: 'blocked', http: 403, message: 'Webtop blocked the request (CloudFront 403)' };
+  }
   if (login.http >= 400 || login.json.status !== true || !ld || !ld.token) {
     return {
       ok: false,

@@ -827,6 +827,73 @@ textarea.plain { width: 100%; border: 0; background: transparent; resize: none; 
 .setup-steps details { margin-top: 6px; }
 .worker-code { width: 100%; font: 11px/1.4 ui-monospace, Menlo, monospace; border: 0; border-radius: 10px; background: var(--fill); padding: 8px; margin-top: 6px; }
 
+/* ---------- notebooks ---------- */
+.nb-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+.nb-card { display: flex; flex-direction: column; gap: 4px; text-align: start; }
+.nb-cover {
+  position: relative; display: block; aspect-ratio: 3 / 4; border-radius: 6px 14px 14px 6px; overflow: hidden;
+  background: var(--card); box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1); border-inline-start: 0;
+}
+.nb-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.nb-lines {
+  position: absolute; inset: 0;
+  background: repeating-linear-gradient(to bottom, transparent 0 17px, var(--grid) 17px 18px), var(--card);
+}
+.nb-spine { position: absolute; inset-block: 0; inset-inline-start: 0; width: 14px; background: var(--nb); }
+.nb-card:active .nb-cover { transform: scale(0.97); }
+.nb-name { font-weight: 700; font-size: 16px; padding-inline: 2px; }
+.nb-meta { font-size: 12px; color: var(--muted); padding-inline: 2px; }
+.nb-actions { display: flex; flex-direction: column; gap: 8px; margin-bottom: 4px; }
+.nb-shoot { min-height: 54px; font-size: 17px; border-radius: 14px; cursor: pointer; }
+.nb-actions-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; }
+.nb-actions-row .btn { padding-inline: 10px; font-size: 15px; }
+.nb-batch { margin-bottom: 14px; }
+.nb-batch-title { display: flex; align-items: center; gap: 4px; width: 100%; padding: 4px 4px 8px; font-size: 15px; }
+.nb-batch-title .chev { margin-inline-start: auto; }
+.nb-pages { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.nb-page { aspect-ratio: 3 / 4; border-radius: 8px; overflow: hidden; background: var(--card); box-shadow: var(--shadow); }
+.nb-page img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.nb-link { margin-bottom: 10px; gap: 12px; font-size: 22px; }
+.nb-link b { font-size: 16px; }
+
+/* ---------- exam material / attachments ---------- */
+.card-title { display: flex; align-items: center; gap: 6px; font-size: 16px; margin: 12px 0 2px; }
+.card > .card-title:first-child { margin-top: 0; }
+.card-title svg { width: 18px; height: 18px; color: var(--accent); }
+.card .files-grid { margin-top: 10px; }
+.linked-list { margin: 8px 0; border-radius: 12px; overflow: hidden; background: var(--card-2); }
+.linked-row { display: flex; align-items: center; }
+.linked-row + .linked-row { border-top: 0.5px solid var(--sep); }
+.linked-row .row-btn { flex: 1; min-height: 44px; padding: 8px 12px; }
+.pick-list { max-height: 60vh; overflow-y: auto; }
+.pick-row { display: flex; align-items: center; gap: 12px; padding: 10px 14px; cursor: pointer; }
+.pick-row + .pick-row { border-top: 0.5px solid var(--sep); }
+.pick-row input { width: 22px; height: 22px; accent-color: var(--accent); flex-shrink: 0; }
+.pdf-badge { font-size: 13px; font-weight: 800; color: #fff; background: var(--danger); border-radius: 5px; padding: 2px 6px; }
+.file-field { padding: 10px !important; font-size: 15px !important; }
+
+/* ---------- gallery & pdf viewer ---------- */
+.gallery { display: flex; flex-direction: column; gap: 8px; }
+.gallery-top { display: flex; justify-content: space-between; gap: 8px; min-height: 20px; }
+.gallery-stage { display: flex; align-items: center; justify-content: center; min-height: 55vh; background: #111; border-radius: 14px; overflow: hidden; touch-action: pan-y; }
+.g-img { max-width: 100%; max-height: 66vh; object-fit: contain; display: block; }
+.gallery-nav { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 8px; }
+.pdf-pages { display: flex; flex-direction: column; gap: 10px; min-height: 40vh; }
+.pdf-page { width: 100%; height: auto; border-radius: 8px; box-shadow: 0 1px 8px rgba(0, 0, 0, 0.12); background: #fff; }
+.pdf-pages .spinner { margin-top: 20vh; }
+.ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ---------- timetable pdf import ---------- */
+.pdf-btn { cursor: pointer; font-size: 13px; padding: 0 8px; }
+.pdf-btn b { border: 1.5px solid currentColor; border-radius: 6px; padding: 1px 5px; }
+.link-btn.inline { display: inline; padding: 0; min-height: 0; font-size: inherit; cursor: pointer; text-decoration: underline; }
+.imp-lessons { display: flex; flex-direction: column; gap: 6px; margin: 10px 0 14px; }
+.imp-day { margin: 10px 2px 2px; font-size: 15px; color: var(--accent-text); }
+.imp-lesson { display: flex; align-items: center; gap: 8px; background: var(--card); border-radius: 12px; padding: 8px 10px; }
+@media (prefers-color-scheme: dark) { .imp-lesson { background: #2c2c2e; } }
+.imp-lesson input[type="checkbox"] { width: 22px; height: 22px; accent-color: var(--accent); flex-shrink: 0; }
+.imp-subj { width: 100%; border: 0; background: var(--fill); border-radius: 8px; padding: 7px 9px; font-size: 16px; font-weight: 600; outline: none; margin-bottom: 2px; }
+
 /* ---------- phone in landscape: compact chrome so content has room ---------- */
 @media (orientation: landscape) and (max-height: 500px) {
   :root { --tabbar-h: 40px; }

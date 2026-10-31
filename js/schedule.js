@@ -1,7 +1,8 @@
 // Weekly timetable (מערכת שעות): views + actions.
-import { S, save, subjectName, subjectColor } from './core.js';
+import { S, save, subjectName, subjectColor, ensureSubject } from './core.js';
 import { esc, uid, isoDate, addDays, startOfDay, pad, fmtDate, DAY_LETTERS } from './util.js';
-import { formSheet, openSheet, askConfirm, closeAllSheets } from './ui.js';
+import { formSheet, openSheet, askConfirm, closeAllSheets, toast } from './ui.js';
+import { parseTimetablePdf } from './pdfTimetable.js';
 import { ICON } from './icons.js';
 import { head, iconBtn, empty, section } from './components.js';
 import { rerender } from './router.js';
@@ -80,7 +81,7 @@ export function schedulePage() {
   ).join('');
   const w = S.data.settings.webtop;
   return `
-    ${head('מערכת שעות', { back: '#home', actions: iconBtn('add-lesson', ICON.plus, 'הוספת שיעור') })}
+    ${head('מערכת שעות', { back: '#home', actions: `${pdfButton('icon-btn pdf-btn', '<b>PDF</b>')}${iconBtn('add-lesson', ICON.plus, 'הוספת שיעור')}` })}
     <div class="day-chips" role="group" aria-label="יום">${chips}</div>
     <h2 class="day-title">יום ${DAY_NAMES[day]}</h2>
     ${
@@ -90,13 +91,104 @@ export function schedulePage() {
             '🗓️',
             S.data.lessons.length ? 'אין שיעורים ביום הזה' : 'עוד אין מערכת שעות. אפשר להוסיף שיעורים ידנית, או לייבא אותם מוובטופ.',
             `<div class="row gap center-row">
+              ${pdfButton('btn primary', `${ICON.clip} ייבוא מ-PDF`)}
               <button class="btn tinted" data-act="add-lesson">＋ הוספת שיעור</button>
               ${w.url ? `<button class="btn ghost" data-act="webtop-sync">${ICON.sync} סנכרון מוובטופ</button>` : `<button class="btn ghost" data-go="#more">חיבור לוובטופ</button>`}
             </div>`
           )
     }
     <p class="muted small center">לחיצה על שיעור: סיכום שיעור, שיעורי בית, עריכה</p>
+    ${list.length ? `<p class="muted small center">יש לך את המערכת כ-PDF (למשל מוובטופ)? ${pdfButton('link-btn inline', 'ייבוא מ-PDF')}</p>` : ''}
   `;
+}
+
+const pdfButton = (cls, label) =>
+  `<label class="${cls}" aria-label="ייבוא מערכת מ-PDF">${label}<input type="file" accept="application/pdf,.pdf" data-sched-pdf hidden></label>`;
+
+/** Read a timetable PDF, show an editable preview, then save. */
+export async function importTimetablePdf(file) {
+  if (!file) return;
+  const close = openSheet(`<div class="progress-sheet"><div class="spinner" aria-hidden="true"></div><p>קורא את המערכת מה-PDF…</p></div>`);
+  let res;
+  try {
+    res = await parseTimetablePdf(file);
+  } catch (e) {
+    close();
+    toast('לא הצלחתי לפתוח את הקובץ. בטוח שזה PDF?', 6000);
+    return;
+  }
+  close();
+  if (!res.lessons.length) {
+    const why =
+      res.reason === 'no-text'
+        ? 'ב-PDF הזה אין טקסט, רק תמונה (למשל צילום מסך שנשמר כ-PDF), ולכן אי אפשר לקרוא ממנו.'
+        : res.reason === 'no-days'
+        ? 'לא מצאתי בקובץ את שמות הימים (ראשון, שני…), ולכן לא הצלחתי להבין איפה כל יום.'
+        : 'מצאתי את הימים, אבל לא הצלחתי לשייך שיעורים לשעות.';
+    setTimeout(
+      () =>
+        openSheet(`<h3 class="sheet-title">לא הצלחתי לקרוא את המערכת</h3><p class="center">${why}</p>
+          <p class="muted small center">אפשר להוסיף שיעורים ידנית, או לשלוח לי צילום מסך של ה-PDF (אפשר להסתיר שמות), ואני אתאים את הקריאה.</p>
+          <button class="btn ghost block" data-close>סגירה</button>`),
+      280
+    );
+    return;
+  }
+  setTimeout(() => previewSheet(res.lessons), 280);
+}
+
+function previewSheet(found) {
+  const rows = found.map((l) => ({ ...l, on: true }));
+  const hasExisting = S.data.lessons.length > 0;
+  const html = () =>
+    SCHOOL_DAYS.filter((d) => rows.some((r) => r.day === d))
+      .map(
+        (d) => `<h4 class="imp-day">יום ${DAY_NAMES[d]}</h4>${rows
+          .map((r, i) => (r.day !== d ? '' : `<div class="imp-lesson">
+            <input type="checkbox" data-i="${i}" data-f="on" ${r.on ? 'checked' : ''} aria-label="לשמור">
+            <span class="lesson-num">${r.period ?? ''}</span>
+            <div class="grow"><input class="imp-subj" data-i="${i}" data-f="subject" value="${esc(r.subject)}" aria-label="מקצוע">
+              <span class="muted small">${[r.start && `<bdi>${r.start}${r.end ? `–${r.end}` : ''}</bdi>`, esc(r.teacher), esc(r.room)].filter(Boolean).join(' · ')}</span></div>
+          </div>`))
+          .join('')}`
+      )
+      .join('');
+  openSheet(
+    `<div class="sheet-head"><button type="button" class="link-btn" data-close>ביטול</button><h3>המערכת מה-PDF</h3><span></span></div>
+     <p class="small"><b>מצאתי ${rows.length} שיעורים</b>. אפשר לתקן שמות או לבטל שיעורים לפני השמירה.</p>
+     <div class="imp-lessons">${html()}</div>
+     ${hasExisting ? `<label class="toggle-row"><input type="checkbox" data-replace checked> להחליף את המערכת הקיימת</label>` : ''}
+     <button class="btn primary block" data-save>שמירת המערכת</button>`,
+    {
+      tall: true,
+      onMount(sheet, close) {
+        const onEdit = (ev) => {
+          const el = ev.target;
+          if (el.dataset.i == null) return;
+          rows[+el.dataset.i][el.dataset.f] = el.type === 'checkbox' ? el.checked : el.value;
+        };
+        sheet.addEventListener('input', onEdit);
+        sheet.addEventListener('change', onEdit);
+        sheet.querySelector('[data-save]').addEventListener('click', () => {
+          const keep = rows.filter((r) => r.on && r.subject.trim());
+          if (!keep.length) return toast('לא נבחרו שיעורים');
+          if (!hasExisting || sheet.querySelector('[data-replace]')?.checked) S.data.lessons = [];
+          for (const r of keep) {
+            S.data.lessons.push({
+              id: uid(), source: 'pdf', day: r.day, period: r.period, start: r.start, end: r.end,
+              subjectId: ensureSubject(r.subject.trim()), title: r.subject.trim(), teacher: r.teacher, room: r.room,
+            });
+          }
+          save();
+          close();
+          const t = new Date().getDay();
+          S.ui.schedDay = t === 6 ? 0 : t;
+          rerender();
+          toast(`המערכת נשמרה ✔︎ ${keep.length} שיעורים`);
+        });
+      },
+    }
+  );
 }
 
 function lessonForm(l) {

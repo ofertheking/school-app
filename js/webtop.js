@@ -210,6 +210,8 @@ export function mergeWebtop(parsed) {
 function explain(j, e) {
   if (e instanceof TypeError) return 'השרת לא עונה. בודקים שהכתובת נכונה ושיש אינטרנט.';
   if (j?.error === 'login') return `וובטופ דחה את הכניסה: ${j.message || 'שם משתמש או סיסמה לא נכונים'}`;
+  if (j?.error === 'blocked')
+    return 'וובטופ חוסם חיבורים שמגיעים משרתים, ולכן הסנכרון האוטומטי לא עובד. אפשר לייבא את המערכת מ-PDF (במערכת שעות) ואת המבחנים בהעתק-הדבק.';
   if (j?.error === 'origin') return 'השרת מוגדר לכתובת אחרת. מעתיקים את קוד השרת מחדש ומדביקים ב-Cloudflare.';
   if (j?.error === 'missing_credentials') return 'חסרים שם משתמש או סיסמה';
   return `שגיאה: ${j?.message || e?.message || 'לא ידוע'}`;

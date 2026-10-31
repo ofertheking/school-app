@@ -18,6 +18,8 @@ import * as Sched from './schedule.js';
 import * as Cards from './flashcards.js';
 import * as Importer from './importer.js';
 import * as Webtop from './webtop.js';
+import * as Files from './files.js';
+import * as Notebooks from './notebooks.js';
 import { ICON } from './icons.js';
 import {
   consumeOAuthRedirect, getToken, forgetToken, startClassroomLogin, syncClassroom,
@@ -51,6 +53,7 @@ function cleanupEmptyItem(r) {
 const TAB_OF = {
   home: 'home', exams: 'exams', exam: 'exams', tasks: 'tasks', study: 'study', library: 'library',
   item: 'library', subject: 'home', more: 'more', schedule: 'home', deck: 'study', review: 'study',
+  notebook: 'library',
 };
 
 function render() {
@@ -73,6 +76,7 @@ function render() {
       schedule: Sched.schedulePage,
       deck: () => Cards.deckPage(id),
       review: Cards.reviewPage,
+      notebook: () => Notebooks.notebookPage(id),
     }[name] || V.home;
   if (currentRoute === 'review' && r !== 'review') Cards.onLeaveReview();
   view.innerHTML = html();
@@ -163,9 +167,14 @@ function examForm(e, presetSubject) {
       { name: 'type', label: 'סוג', type: 'select', options: EXAM_TYPES.map((t) => ({ value: t, label: t })), half: true },
       { name: 'date', label: 'תאריך', type: 'date', required: true, half: true },
       { name: 'time', label: 'שעה (לא חובה)', type: 'time', half: true },
-      ...(isNew ? [{ name: 'topics', label: 'החומר למבחן — שורה לכל נושא', type: 'textarea', rows: 4, placeholder: 'פונקציות\nנגזרות\nתרגילים מהחוברת עמ׳ 20–35' }] : []),
+      ...(isNew
+        ? [
+            { name: 'topics', label: 'החומר למבחן — שורה לכל נושא', type: 'textarea', rows: 4, placeholder: 'פונקציות\nנגזרות\nתרגילים מהחוברת עמ׳ 20–35' },
+            { name: 'files', label: 'דף חומר / PDF / צילומים (לא חובה)', type: 'files', accept: 'image/*,application/pdf,.doc,.docx,.ppt,.pptx' },
+          ]
+        : []),
     ],
-    onSubmit(v) {
+    async onSubmit(v) {
       if (isNew) {
         const ex = {
           id: uid(), subjectId: v.subjectId, title: v.title || `${v.type} ב${subjectName(v.subjectId)}`,
@@ -174,6 +183,7 @@ function examForm(e, presetSubject) {
         };
         S.data.exams.push(ex);
         save();
+        if (v.files?.length) await Files.attachTo(`exam:${ex.id}:material`, v.files);
         navigate(`#exam-${ex.id}`);
         toast('המבחן נוסף. בהצלחה! 🍀');
       } else {
@@ -330,22 +340,15 @@ function lessonNoteForm(presetSubject) {
 }
 
 async function attachFiles(itemId, fileList) {
+  if (!fileList?.length) return;
+  await Files.attachTo(`item:${itemId}`, fileList);
   const it = item(itemId);
-  if (!it || !fileList?.length) return;
-  toast('שומר…', 1200);
-  for (const f of fileList) {
-    const blob = await compressImage(f);
-    const fid = uid();
-    await putFile(fid, blob);
-    it.files.push({ id: fid, name: f.name || 'קובץ', type: blob.type || f.type, size: blob.size });
-  }
-  if (!it.title) {
+  if (it && !it.title) {
     const f = fileList[0];
     const generic = !f.name || /^(image|img_|photo|תמונה)/i.test(f.name);
     it.title = generic ? `צילום ${fmtDate(isoDate())}` : f.name.replace(/\.[^.]+$/, '');
+    save();
   }
-  it.updatedAt = Date.now();
-  save();
   render();
 }
 
@@ -592,6 +595,11 @@ const ACTIONS = {
   'edit-exam': ({ id }) => examForm(exam(id)),
   async 'del-exam'({ id }) {
     if (!(await askConfirm('למחוק את המבחן?'))) return;
+    const ex = exam(id);
+    for (const f of [...(ex?.materialFiles || []), ...(ex?.paperFiles || [])]) {
+      forgetFileURL(f.id);
+      await deleteFile(f.id);
+    }
     S.data.exams = S.data.exams.filter((e) => e.id !== id);
     S.data.sessions.forEach((s) => s.examId === id && (s.examId = ''));
     save();
@@ -757,21 +765,6 @@ const ACTIONS = {
       toast('לא הצלחתי לשתף מכאן');
     }
   },
-  async 'att-del'({ id, fid }) {
-    if (!(await askConfirm('למחוק את הקובץ?'))) return;
-    const it = item(id);
-    it.files = it.files.filter((f) => f.id !== fid);
-    forgetFileURL(fid);
-    await deleteFile(fid);
-    it.updatedAt = Date.now();
-    save();
-    render();
-  },
-  async 'att-view'({ fid }) {
-    const u = await fileURL(fid);
-    if (!u) return toast('הקובץ לא נמצא');
-    openSheet(`<div class="viewer"><img src="${u}" alt=""></div><button class="btn ghost block" data-close>סגירה</button>`, { tall: true });
-  },
 
   // connections
   'gc-sync'() {
@@ -819,7 +812,48 @@ const ACTIONS = {
   },
 };
 
-Object.assign(ACTIONS, Sched.actions, Cards.actions, Importer.actions, Webtop.actions);
+Object.assign(ACTIONS, Sched.actions, Cards.actions, Importer.actions, Webtop.actions, Files.actions, Notebooks.actions, {
+  'exam-link-items'({ id }) {
+    const e = exam(id);
+    const chosen = new Set(e.itemIds || []);
+    const list = S.data.items
+      .filter((it) => !it.notebook || it.body?.trim())
+      .sort((a, b) => (b.subjectId === e.subjectId) - (a.subjectId === e.subjectId) || (b.updatedAt || 0) - (a.updatedAt || 0));
+    if (!list.length) return toast('עוד אין סיכומים. אפשר ליצור "סיכום חדש"');
+    openSheet(
+      `<div class="sheet-head"><button type="button" class="link-btn" data-close>ביטול</button><h3>סיכומים למבחן</h3><button type="button" class="link-btn strong" data-save>שמירה</button></div>
+       <div class="card list pick-list">${list
+         .map((it) => `<label class="pick-row"><input type="checkbox" value="${it.id}" ${chosen.has(it.id) ? 'checked' : ''}>
+           <span class="grow">${esc(it.title || 'ללא כותרת')}<br><span class="muted small">${esc(subjectName(it.subjectId))}${it.lessonDate ? ' · סיכום שיעור' : ''}</span></span></label>`)
+         .join('')}</div>`,
+      {
+        tall: true,
+        onMount(sheet, close) {
+          sheet.querySelector('[data-save]').addEventListener('click', () => {
+            e.itemIds = [...sheet.querySelectorAll('input:checked')].map((x) => x.value);
+            save();
+            close();
+            render();
+          });
+        },
+      }
+    );
+  },
+  'exam-unlink'({ id, item: itemId }) {
+    const e = exam(id);
+    e.itemIds = (e.itemIds || []).filter((x) => x !== itemId);
+    save();
+    render();
+  },
+  'exam-new-note'({ id }) {
+    const e = exam(id);
+    const it = createItem({ subjectId: e.subjectId, title: `סיכום ל${e.title || e.type || 'מבחן'}` });
+    e.itemIds = [...(e.itemIds || []), it.id];
+    save();
+    navigate(`#item-${it.id}`);
+    setTimeout(() => view.querySelector('.editor-body')?.focus(), 80);
+  },
+});
 
 // ---------------------------------------------------------------- events
 
@@ -890,9 +924,16 @@ document.addEventListener('change', async (e) => {
     setPath(el.dataset.setting, v);
     save();
   }
-  if (el.dataset.attach) {
-    await attachFiles(el.dataset.attach, [...el.files]);
+  if (el.dataset.attachRef) await Files.onAttachInput(el);
+  if (el.hasAttribute('data-nb-pages')) {
+    const files = [...el.files];
     el.value = '';
+    await Notebooks.addNotebookPages(el.dataset.nbPages, files);
+  }
+  if (el.hasAttribute('data-sched-pdf')) {
+    const f = el.files[0];
+    el.value = '';
+    await Sched.importTimetablePdf(f);
   }
   if (el.hasAttribute('data-import') && el.files[0]) {
     await importBackup(el.files[0]);

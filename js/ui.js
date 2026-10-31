@@ -135,6 +135,9 @@ function fieldHTML(f, v) {
         .map((o) => `<option value="${esc(o.value)}"${String(o.value) === String(val) ? ' selected' : ''}>${esc(o.label)}</option>`)
         .join('')}</select>`;
       break;
+    case 'files':
+      input = `<input id="${id}" name="${f.name}" type="file" multiple accept="${esc(f.accept || '*/*')}" class="file-field">`;
+      break;
     case 'subject':
       input = `<select id="${id}" name="${f.name}" data-subject-select>${subjectOptions(val)}</select>
         <input class="new-subject" name="${f.name}__new" placeholder="שם המקצוע החדש" hidden>`;
@@ -183,6 +186,10 @@ export function formSheet({ title, fields, values = {}, submitLabel = 'שמיר�
             const el = form.elements[f.name];
             if (!el) continue;
             let v = el.value;
+            if (f.type === 'files') {
+              vals[f.name] = [...el.files];
+              continue;
+            }
             if (f.type === 'subject') v = resolveSubject(v, form.elements[`${f.name}__new`]?.value);
             if (f.type === 'number') v = v === '' ? '' : Number(v);
             if (typeof v === 'string') v = v.trim();

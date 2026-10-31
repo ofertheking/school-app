@@ -16,6 +16,8 @@ import { head, iconBtn, section, empty, seg, dot, subjectChip } from './componen
 import { todaySection } from './schedule.js';
 import { decksList } from './flashcards.js';
 import { webtopCard } from './webtop.js';
+import { filesGrid } from './files.js';
+import { notebooksGrid } from './notebooks.js';
 
 // ---------- shared bits ----------
 
@@ -38,7 +40,7 @@ export function examCard(e) {
     <span class="exam-main">
       <span class="row between"><span class="eyebrow">${esc(subjectName(e.subjectId))} · ${esc(e.type || 'מבחן')}</span>${right}</span>
       <span class="title">${esc(e.title || e.type || 'מבחן')}</span>
-      <span class="muted small">${fmtDate(e.date)}${e.time ? ` · <bdi>${esc(e.time)}</bdi>` : ''}</span>
+      <span class="muted small">${fmtDate(e.date)}${e.time ? ` · <bdi>${esc(e.time)}</bdi>` : ''}${(e.materialFiles || []).length + (e.itemIds || []).length ? ` · 📎 ${(e.materialFiles || []).length + (e.itemIds || []).length}` : ''}${(e.paperFiles || []).length ? ' · 📷' : ''}</span>
       ${
         past
           ? ''
@@ -198,11 +200,71 @@ export function examDetail(id) {
   const e = exam(id);
   if (!e) return notFound('#exams');
   const n = daysUntil(e.date);
+  const past = n < 0;
   const r = readiness(e);
   const topics = e.topics || [];
   const mastered = topics.filter((t) => t.s === 2).length;
   const studied = minutesBetween(0, Date.now() + 1, { examId: e.id });
+  const linked = (e.itemIds || []).map((x) => item(x)).filter(Boolean);
   const big = n > 1 ? `<b class="hero-num">${n}</b><span>ימים למבחן</span>` : n === 1 ? `<b class="hero-num">מחר</b><span>בהצלחה!</span>` : n === 0 ? `<b class="hero-num">היום</b><span>בהצלחה! 🍀</span>` : `<b class="hero-num">${e.grade !== '' && e.grade != null ? esc(e.grade) : '—'}</b><span>ציון</span>`;
+
+  const material = section(
+    'החומר למבחן',
+    `<div class="card">
+      ${r != null ? `<div class="readiness big">${meter(r, { label: 'מוכנות' })}<span class="small"><b>${r}%</b> מוכנות · ${mastered}/${topics.length} נושאים בשליטה</span></div>` : ''}
+      <div class="topics">
+        ${topics
+          .map(
+            (t) => `<div class="topic">
+            <button class="topic-state ${TOPIC_STATES[t.s || 0].cls}" data-act="topic-cycle" data-id="${e.id}" data-tid="${t.id}" aria-label="מצב: ${TOPIC_STATES[t.s || 0].label}. לחיצה משנה">
+              <span class="ts-ico" aria-hidden="true"></span><span class="ts-label">${TOPIC_STATES[t.s || 0].label}</span>
+            </button>
+            <span class="topic-text">${esc(t.text)}</span>
+            <button class="icon-btn sm" data-act="topic-del" data-id="${e.id}" data-tid="${t.id}" aria-label="מחיקת נושא">${ICON.x}</button>
+          </div>`
+          )
+          .join('')}
+      </div>
+      <form class="add-topic" data-form="topic" data-id="${e.id}">
+        <textarea name="t" rows="1" placeholder="הוספת נושא…"></textarea>
+        <button class="btn tinted" type="submit">הוספה</button>
+      </form>
+      <p class="muted small">לחיצה על המצב מעבירה: עוד לא ← בתהליך ← שולט/ת. אפשר גם להדביק רשימה (שורה לכל נושא).</p>
+    </div>
+    <div class="card">
+      <h3 class="card-title">${ICON.clip} קבצים וצילומים</h3>
+      <p class="muted small">דף החומר מהמורה, מצגות, PDF, צילומים מהספר או מהלוח</p>
+      ${filesGrid(`exam:${e.id}:material`, e.materialFiles || [], { addLabel: 'PDF / צילום' })}
+    </div>
+    <div class="card">
+      <h3 class="card-title">${ICON.note} סיכומים למבחן</h3>
+      ${
+        linked.length
+          ? `<div class="linked-list">${linked
+              .map((it) => `<div class="linked-row"><button class="row-btn" data-go="#item-${it.id}"><span class="item-thumb sm k-${itemKind(it)}">${ICON.note}</span><span class="grow">${esc(it.title || 'ללא כותרת')}</span></button>
+                <button class="icon-btn sm" data-act="exam-unlink" data-id="${e.id}" data-item="${it.id}" aria-label="הסרה מהמבחן">${ICON.x}</button></div>`)
+              .join('')}</div>`
+          : `<p class="muted small">אפשר לחבר לכאן סיכומים וסיכומי שיעור מהמחברת</p>`
+      }
+      <div class="row gap">
+        <button class="btn tinted grow sm" data-act="exam-link-items" data-id="${e.id}">${ICON.link} חיבור סיכומים</button>
+        <button class="btn ghost grow sm" data-act="exam-new-note" data-id="${e.id}">${ICON.plus} סיכום חדש</button>
+      </div>
+    </div>`
+  );
+
+  const paper = section(
+    past ? 'הציון והמבחן שחזר' : 'אחרי המבחן',
+    `<div class="card">
+      <div class="row between">
+        <label for="grade-${e.id}" class="muted">${n > 0 ? 'הציון (אחרי שהמבחן חוזר)' : 'מה קיבלת?'}</label>
+        <input id="grade-${e.id}" class="grade-input" type="number" inputmode="decimal" min="0" max="100" data-bind="exam:${e.id}:grade" value="${esc(e.grade ?? '')}" placeholder="—">
+      </div>
+      <h3 class="card-title">${ICON.camera} צילומי המבחן</h3>
+      <p class="muted small">${past ? 'מצלמים את המבחן שחזר, כדי לשמור תיעוד וללמוד מהטעויות לבגרות' : 'כשהמבחן יחזור אפשר לצלם אותו כאן, כדי לשמור תיעוד'}</p>
+      ${filesGrid(`exam:${e.id}:paper`, e.paperFiles || [], { addLabel: 'צילום המבחן', accept: 'image/*,application/pdf' })}
+    </div>`
+  );
 
   return `
     ${head(e.title || e.type || 'מבחן', {
@@ -212,30 +274,8 @@ export function examDetail(id) {
     })}
     <div class="card countdown ${n >= 0 ? examUrgency(e) : 'past'}">${big}</div>
 
-    ${section(
-      'החומר למבחן',
-      `<div class="card">
-        ${r != null ? `<div class="readiness big">${meter(r, { label: 'מוכנות' })}<span class="small"><b>${r}%</b> מוכנות · ${mastered}/${topics.length} נושאים בשליטה</span></div>` : ''}
-        <div class="topics">
-          ${topics
-            .map(
-              (t) => `<div class="topic">
-              <button class="topic-state ${TOPIC_STATES[t.s || 0].cls}" data-act="topic-cycle" data-id="${e.id}" data-tid="${t.id}" aria-label="מצב: ${TOPIC_STATES[t.s || 0].label}. לחיצה משנה">
-                <span class="ts-ico" aria-hidden="true"></span><span class="ts-label">${TOPIC_STATES[t.s || 0].label}</span>
-              </button>
-              <span class="topic-text">${esc(t.text)}</span>
-              <button class="icon-btn sm" data-act="topic-del" data-id="${e.id}" data-tid="${t.id}" aria-label="מחיקת נושא">${ICON.x}</button>
-            </div>`
-            )
-            .join('')}
-        </div>
-        <form class="add-topic" data-form="topic" data-id="${e.id}">
-          <textarea name="t" rows="1" placeholder="הוספת נושא…"></textarea>
-          <button class="btn tinted" type="submit">הוספה</button>
-        </form>
-        <p class="muted small">לחיצה על המצב מעבירה: עוד לא ← בתהליך ← שולט/ת. אפשר גם להדביק רשימה (שורה לכל נושא).</p>
-      </div>`
-    )}
+    ${past ? paper : ''}
+    ${material}
 
     ${section(
       'למידה למבחן',
@@ -250,13 +290,7 @@ export function examDetail(id) {
       `<div class="card"><textarea class="autosize plain" data-bind="exam:${e.id}:notes" rows="3" placeholder="פרקים בספר, דפי עבודה, מה המורה אמר/ה…">${esc(e.notes || '')}</textarea></div>`
     )}
 
-    ${section(
-      'ציון',
-      `<div class="card row between">
-        <label for="grade-${e.id}" class="muted">${n > 0 ? 'אחרי המבחן אפשר לרשום כאן ציון' : 'מה קיבלת?'}</label>
-        <input id="grade-${e.id}" class="grade-input" type="number" inputmode="decimal" min="0" max="100" data-bind="exam:${e.id}:grade" value="${esc(e.grade ?? '')}" placeholder="—">
-      </div>`
-    )}
+    ${past ? '' : paper}
 
     <div class="actions-col">
       <button class="btn tinted block" data-act="exam-cal" data-id="${e.id}">${ICON.calendar} הוספה ליומן עם תזכורת</button>
@@ -385,7 +419,7 @@ export function libraryItems() {
     .sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || (b.updatedAt || 0) - (a.updatedAt || 0));
 }
 
-const KIND_ICON = { note: ICON.note, lesson: ICON.calendar, file: ICON.clip, link: ICON.link };
+const KIND_ICON = { note: ICON.note, lesson: ICON.calendar, file: ICON.clip, link: ICON.link, notebook: ICON.camera };
 
 export function libraryList() {
   const list = libraryItems();
@@ -412,9 +446,17 @@ export function libraryList() {
 }
 
 export function library() {
-  const kinds = [['all', 'הכל'], ['note', 'סיכומים'], ['lesson', 'סיכומי שיעור'], ['file', 'קבצים ותמונות'], ['link', 'קישורים']];
+  const kinds = [['all', 'הכל'], ['note', 'סיכומים'], ['lesson', 'סיכומי שיעור'], ['notebook', 'דפי מחברת'], ['file', 'קבצים ותמונות'], ['link', 'קישורים']];
+  const viewSeg = seg('libView', [['notebooks', 'מחברות'], ['all', 'כל החומר']]);
+  if (S.ui.libView !== 'all') {
+    return `
+      ${head('חומר וסיכומים', { actions: iconBtn('add-item', ICON.plus, 'הוספת חומר') })}
+      ${viewSeg}
+      ${notebooksGrid()}`;
+  }
   return `
     ${head('חומר וסיכומים', { actions: iconBtn('add-item', ICON.plus, 'הוספת חומר') })}
+    ${viewSeg}
     <label class="search"><span aria-hidden="true">${ICON.search}</span>
       <input type="search" placeholder="חיפוש בסיכומים ובחומר" value="${esc(S.ui.libQuery)}" data-input="lib-query" aria-label="חיפוש">
     </label>
@@ -439,7 +481,7 @@ export function itemDetail(id) {
   const files = it.files || [];
   return `
     ${head('', {
-      back: '#library',
+      back: it.notebook || S.ui.libView !== 'all' ? `#notebook-${it.subjectId || 'general'}` : '#library',
       actions: `${iconBtn('item-share', ICON.share, 'שיתוף', `data-id="${it.id}"`)}
                 ${iconBtn('item-pin', ICON.pin, it.pinned ? 'ביטול נעיצה' : 'נעיצה', `data-id="${it.id}" aria-pressed="${!!it.pinned}"`)}
                 ${iconBtn('del-item', ICON.trash, 'מחיקה', `data-id="${it.id}"`)}`,
@@ -463,22 +505,8 @@ export function itemDetail(id) {
       <textarea class="editor-body autosize" data-bind="item:${it.id}:body" placeholder="${it.lessonDate ? 'מה למדנו? מושגים, הסברים, מה המורה הדגיש/ה…\nטיפ: שורות בצורה "מושג - הגדרה" אפשר להפוך לכרטיסיות' : 'כותבים כאן את הסיכום…'}">${esc(it.body || '')}</textarea>
       <button class="btn tinted block sm" data-act="note-to-cards" data-id="${it.id}">🃏 יצירת כרטיסיות מהסיכום</button>
 
-      <div class="section-head"><h2>קבצים ותמונות</h2></div>
-      <div class="files-grid">
-        ${files
-          .map((f) =>
-            f.type?.startsWith('image/')
-              ? `<div class="file-tile"><button class="file-img" data-act="att-view" data-id="${it.id}" data-fid="${f.id}" aria-label="הגדלת תמונה"><img alt="${esc(f.name)}" data-file-src="${f.id}"></button>
-                 <button class="file-del" data-act="att-del" data-id="${it.id}" data-fid="${f.id}" aria-label="מחיקת קובץ">${ICON.x}</button></div>`
-              : `<div class="file-tile doc"><a data-file-href="${f.id}" target="_blank" rel="noopener" class="file-doc">${ICON.clip}<span>${esc(f.name)}</span></a>
-                 <button class="file-del" data-act="att-del" data-id="${it.id}" data-fid="${f.id}" aria-label="מחיקת קובץ">${ICON.x}</button></div>`
-          )
-          .join('')}
-        <label class="file-tile add">
-          <input type="file" accept="image/*,application/pdf,.doc,.docx,.ppt,.pptx,.txt" multiple data-attach="${it.id}" hidden>
-          ${ICON.camera}<span>צילום / קובץ</span>
-        </label>
-      </div>
+      <div class="section-head"><h2>${it.notebook ? 'דפי המחברת' : 'קבצים ותמונות'}</h2></div>
+      ${filesGrid(`item:${it.id}`, files, it.notebook ? { addLabel: 'עוד דפים', accept: 'image/*' } : {})}
     </div>
   `;
 }
@@ -506,6 +534,7 @@ export function subjectDetail(id) {
       <div class="stat"><span class="stat-label">סה״כ</span>${statVal(totalMin)}</div>
       <div class="stat"><span class="stat-label">ממוצע</span><span class="stat-value">${avg ?? '—'}</span></div>
     </div>
+    <button class="card row-btn nb-link" data-go="#notebook-${id}">📓<span class="grow"><b>המחברת של ${esc(s.name)}</b><br><span class="muted small">דפי מחברת, סיכומים, קבצים וכרטיסיות</span></span><span class="chev">${ICON.fwd}</span></button>
     <div class="quick">
       <button class="quick-btn" data-act="add-exam" data-subject="${id}"><span>${ICON.exam}</span>מבחן</button>
       <button class="quick-btn" data-act="add-task" data-subject="${id}"><span>${ICON.tasks}</span>משימה</button>

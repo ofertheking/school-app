@@ -43,6 +43,7 @@ export const S = {
     libKind: 'all',
     libSubject: '',
     libQuery: '',
+    libView: 'notebooks',
     weekOffset: 0,
     timerSubject: '',
     timerMode: 'stopwatch',
@@ -213,6 +214,7 @@ export function dueLabelGroup(due) {
 }
 
 export function itemKind(it) {
+  if (it.notebook) return 'notebook';
   if (it.lessonDate) return 'lesson';
   if (it.body && it.body.trim()) return 'note';
   if (it.files && it.files.length) return 'file';
@@ -233,15 +235,27 @@ export function createItem(extra = {}) {
   return it;
 }
 
-/** Find a subject by (loose) name, or create it. */
+/** Find a subject by name, or create it. "מתמטיקה 5 יח״ל" matches "מתמטיקה", but "חינוך גופני" ≠ "חינוך". */
+const LEVEL_WORDS = /^(יחל|יחידות|מוגבר|מוגברת|מורחב|מורחבת|הקבצה|מגמה|רגיל|רגילה|כיתה)$/;
+const nameKey = (x) => String(x || '').toLowerCase().replace(/["'׳״`.,()\-–]/g, '').replace(/\s+/g, ' ').trim();
+function sameSubject(a, b) {
+  const x = nameKey(a);
+  const y = nameKey(b);
+  if (!x || !y) return false;
+  if (x === y) return true;
+  const [short, long] = x.length <= y.length ? [x, y] : [y, x];
+  if (!long.startsWith(`${short} `)) return false;
+  // Only a level / class suffix may differ (digits, יח״ל, א׳…), not another word.
+  return long
+    .slice(short.length + 1)
+    .split(' ')
+    .every((w) => /\d/.test(w) || w.length <= 2 || LEVEL_WORDS.test(w));
+}
+
 export function ensureSubject(name) {
   const clean = String(name || '').trim();
   if (!clean) return '';
-  const n = clean.toLowerCase().replace(/["'׳״`]/g, '').replace(/\s+/g, ' ');
-  const nm = (x) => x.toLowerCase().replace(/["'׳״`]/g, '').replace(/\s+/g, ' ');
-  const hit =
-    S.data.subjects.find((s) => nm(s.name) === n) ||
-    S.data.subjects.find((s) => n.includes(nm(s.name)) || nm(s.name).includes(n));
+  const hit = S.data.subjects.find((s) => sameSubject(s.name, clean));
   if (hit) return hit.id;
   const s = { id: uid(), name: clean, color: nextColor() };
   S.data.subjects.push(s);
