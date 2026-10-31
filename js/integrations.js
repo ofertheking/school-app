@@ -46,6 +46,7 @@ export function startClassroomLogin(clientId) {
     response_type: 'token',
     scope: SCOPES,
     include_granted_scopes: 'true',
+    prompt: 'select_account',
     state,
   });
   location.href = `https://accounts.google.com/o/oauth2/v2/auth?${p}`;
