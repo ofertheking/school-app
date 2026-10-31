@@ -115,7 +115,8 @@ export function timerShown(t = S.data.timer) {
 // ---------- HOME ----------
 
 function installCard() {
-  if (isStandalone() || S.data.settings.installDismissed || !isIOS()) return '';
+  const framed = (() => { try { return window.self !== window.top; } catch { return true; } })();
+  if (framed || isStandalone() || S.data.settings.installDismissed || !isIOS()) return '';
   return `<div class="card install">
     <button class="icon-btn close" data-act="install-dismiss" aria-label="סגירה">${ICON.x}</button>
     <b>להתקין כאפליקציה באייפון 📲</b>
