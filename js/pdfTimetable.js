@@ -59,16 +59,23 @@ const median = (a) => {
   return s.length ? s[Math.floor(s.length / 2)] : 0;
 };
 
-/** Group values that are within `tol` of each other. Returns [{ v (mean), members }]. */
+/**
+ * Chain items into groups while the gap to the PREVIOUS item is within `tol`.
+ * Chaining (vs comparing to the running mean) lets a tall multi-line cell —
+ * subject / teacher / room stacked ~15px apart — stay one group, while the
+ * larger gap to the next period still starts a new one. `v` is the group mean.
+ */
 function cluster(items, key, tol) {
   const sorted = [...items].sort((a, b) => key(b) - key(a));
   const groups = [];
+  let last = null;
   for (const it of sorted) {
     const g = groups[groups.length - 1];
-    if (g && Math.abs(g.v - key(it)) <= tol) {
+    if (g && Math.abs(last - key(it)) <= tol) {
       g.members.push(it);
       g.v = g.members.reduce((s, m) => s + key(m), 0) / g.members.length;
     } else groups.push({ v: key(it), members: [it] });
+    last = key(it);
   }
   return groups;
 }
@@ -86,6 +93,7 @@ const cleanStr = (v) => String(v || '').replace(/\s+/g, ' ').trim();
 /** Strip brackets, gershayim/backticks and long codes from teacher / room text. */
 function scrub(v) {
   return String(v || '')
+    .replace(/`+/g, '״') // gershayim rendered as backticks → ״
     .replace(/[([{][^)\]}]*[)\]}]/g, ' ')
     .replace(/[)\]}][^([{]*[([{]/g, ' ')
     .replace(/[()[\]{}`]/g, ' ')
@@ -99,6 +107,7 @@ function scrub(v) {
 const DROP_TOKEN = /^(יחידות|יח|הקבצה|קבוצה|מגמה|רמה|\d{1,4}[א-ת]?)$/;
 function cleanSubject(v) {
   const s = String(v || '')
+    .replace(/`+/g, '״') // gershayim rendered as backticks → ״ (תנ``ך → תנ״ך)
     .replace(/[([{][^)\]}]*[)\]}]/g, ' ') // (…) normal order
     .replace(/[)\]}][^([{]*[([{]/g, ' ') // )…( reversed RTL glyph order
     .replace(/[()[\]{}]/g, ' ') // any leftover bracket char

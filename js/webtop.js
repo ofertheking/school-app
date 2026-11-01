@@ -266,14 +266,17 @@ export function webtopRows() {
   const chev = `<span class="chev">${ICON.fwd}</span>`;
   const t = (inner, color) => `<span class="tile-ico t-${color}" aria-hidden="true">${inner}</span>`;
   return `<div class="card list">
-    <button class="row-btn" data-act="webtop-setup">${t('<b class="tile-letter">W</b>', 'blue')}
-      <span class="grow">וובטופ<span class="sr-sub">${connected ? `${w.name ? `${esc(w.name)} · ` : ''}סנכרון אחרון: ${w.lastSync ? fmtDateTime(w.lastSync) : 'עוד לא'}` : 'חיבור אוטומטי (ניסיוני)'}</span></span>${chev}</button>
-    ${connected ? `<button class="row-btn" data-act="webtop-sync">${t(ICON.sync, 'teal')}<span class="grow">סנכרון עכשיו</span></button>` : ''}
+    <button class="row-btn" data-go="#schedule">${t(ICON.calendar, 'green')}<span class="grow">ייבוא מערכת שעות מ-PDF<span class="sr-sub">הדרך המומלצת — עובד מצוין עם הקובץ של וובטופ</span></span>${chev}</button>
     <button class="row-btn" data-act="webtop-paste">${t(ICON.tasks, 'orange')}<span class="grow">ייבוא מבחנים בהעתק-הדבק</span>${chev}</button>
-    <button class="row-btn" data-go="#schedule">${t(ICON.calendar, 'green')}<span class="grow">ייבוא מערכת שעות מ-PDF</span>${chev}</button>
-    ${S.ui.webtopShape ? `<button class="row-btn" data-act="webtop-shape">${t(ICON.clip, 'gray')}<span class="grow">העתקת מבנה הנתונים<span class="sr-sub">בלי פרטים אישיים, לשליחה לתיקון</span></span></button>` : ''}
     <a class="row-btn" href="https://webtop.smartschool.co.il/" target="_blank" rel="noopener">${t(ICON.ext, 'gray')}<span class="grow">פתיחת וובטופ</span>${chev}</a>
-  </div>`;
+  </div>
+  <p class="card-foot">חיבור אוטומטי לוובטופ לא אפשרי: השרתים של וובטופ חוסמים כל בקשה שלא מגיעה מהדפדפן עצמו. לכן מייבאים את המערכת מקובץ PDF (מצוין!) ואת המבחנים בהעתק-הדבק.</p>
+  ${
+    connected
+      ? `<div class="card list"><button class="row-btn" data-act="webtop-setup">${t('<b class="tile-letter">W</b>', 'gray')}<span class="grow">חיבור וובטופ ישן<span class="sr-sub">כנראה חסום · אפשר לנתק</span></span>${chev}</button>
+         ${S.ui.webtopShape ? `<button class="row-btn" data-act="webtop-shape">${t(ICON.clip, 'gray')}<span class="grow">העתקת מבנה הנתונים</span></button>` : ''}</div>`
+      : ''
+  }`;
 }
 
 export function openWebtopSetup() {
