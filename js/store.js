@@ -8,9 +8,12 @@ let mode = 'idb'; // 'idb' | 'ls' | 'mem'
 const memFiles = new Map();
 let memState = null;
 
+const RESCUE_KEY = 'school-app-rescue';
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
 function openDB() {
   if (dbPromise) return dbPromise;
-  dbPromise = new Promise((resolve, reject) => {
+  const p = new Promise((resolve, reject) => {
     try {
       const req = indexedDB.open(DB_NAME, 1);
       req.onupgradeneeded = () => {
@@ -18,17 +21,26 @@ function openDB() {
         if (!db.objectStoreNames.contains('kv')) db.createObjectStore('kv');
         if (!db.objectStoreNames.contains('files')) db.createObjectStore('files');
       };
-      req.onsuccess = () => resolve(req.result);
+      req.onsuccess = () => {
+        const db = req.result;
+        // iOS drops the connection when the app sits in the background:
+        // forget it so the next call opens a fresh one.
+        db.onclose = () => { if (dbPromise === p) dbPromise = null; };
+        db.onversionchange = () => { db.close(); if (dbPromise === p) dbPromise = null; };
+        resolve(db);
+      };
       req.onerror = () => reject(req.error);
       req.onblocked = () => reject(new Error('blocked'));
     } catch (e) {
       reject(e);
     }
   });
-  return dbPromise;
+  p.catch(() => { if (dbPromise === p) dbPromise = null; });
+  dbPromise = p;
+  return p;
 }
 
-function run(store, txMode, fn) {
+function runOnce(store, txMode, fn) {
   return openDB().then(
     (db) =>
       new Promise((resolve, reject) => {
@@ -41,11 +53,33 @@ function run(store, txMode, fn) {
   );
 }
 
+/** A transaction, retried on a fresh connection — iOS IndexedDB fails transiently. */
+async function run(store, txMode, fn, tries = 4) {
+  for (let i = 0; ; i++) {
+    try {
+      return await runOnce(store, txMode, fn);
+    } catch (e) {
+      if (i >= tries - 1) throw e;
+      dbPromise = null;
+      await wait(120 * (i + 1));
+    }
+  }
+}
+
 export async function initStore() {
-  try {
-    await openDB();
+  let ok = false;
+  for (let i = 0; i < 4 && !ok; i++) {
+    try {
+      await openDB();
+      ok = true;
+    } catch {
+      dbPromise = null;
+      await wait(150 * (i + 1));
+    }
+  }
+  if (ok) {
     mode = 'idb';
-  } catch {
+  } else {
     try {
       localStorage.setItem('__t', '1');
       localStorage.removeItem('__t');
@@ -63,13 +97,19 @@ export const storageMode = () => mode;
 
 const memKV = new Map(); // key -> state, for the mem fallback (key !== 'state')
 
+const stamp = (x) => (x && typeof x === 'object' && +x._savedAt) || 0;
+
+/**
+ * Read a saved record. In IndexedDB mode a read that keeps failing THROWS —
+ * it never pretends there is no data (that used to start the app empty).
+ * The main state also considers the emergency copy in localStorage, if newer.
+ */
 export async function loadState(key = 'state') {
   if (mode === 'idb') {
-    try {
-      return await run('kv', 'readonly', (s) => s.get(key));
-    } catch {
-      mode = 'ls';
-    }
+    const v = await run('kv', 'readonly', (s) => s.get(key));
+    if (key !== 'state') return v;
+    const rescue = readRescue();
+    return rescue && stamp(rescue) > stamp(v) ? rescue : v;
   }
   if (mode === 'ls') {
     try {
@@ -82,15 +122,28 @@ export async function loadState(key = 'state') {
   return key === 'state' ? memState : memKV.get(key) || null;
 }
 
+function readRescue() {
+  try {
+    const raw = localStorage.getItem(RESCUE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function saveState(state, key = 'state') {
   // Store a plain clone so IndexedDB never sees non-cloneable values.
   const plain = JSON.parse(JSON.stringify(state));
+  if (key === 'state') plain._savedAt = Date.now();
   if (mode === 'idb') {
     try {
       await run('kv', 'readwrite', (s) => s.put(plain, key));
+      if (key === 'state') try { localStorage.removeItem(RESCUE_KEY); } catch { /* ignore */ }
       return;
-    } catch {
-      mode = 'ls';
+    } catch (e) {
+      // Keep using IndexedDB next time; park this save where loadState() will find it.
+      if (key === 'state') try { localStorage.setItem(RESCUE_KEY, JSON.stringify(plain)); } catch { /* full */ }
+      throw e;
     }
   }
   if (mode === 'ls') {
@@ -103,6 +156,51 @@ export async function saveState(state, key = 'state') {
   }
   if (key === 'state') memState = plain;
   else memKV.set(key, plain);
+}
+
+/** Keys of every saved record (state, year archives, automatic snapshots). */
+export async function listStateKeys() {
+  if (mode === 'idb') {
+    try {
+      return (await run('kv', 'readonly', (s) => s.getAllKeys())).map(String);
+    } catch {
+      return [];
+    }
+  }
+  if (mode === 'ls') {
+    const out = [];
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k === LS_KEY) out.push('state');
+        else if (k.startsWith(`${LS_KEY}:`)) out.push(k.slice(LS_KEY.length + 1));
+      }
+    } catch { /* ignore */ }
+    return out;
+  }
+  return [...(memState ? ['state'] : []), ...memKV.keys()];
+}
+
+export async function deleteState(key) {
+  if (key === 'state') return;
+  if (mode === 'idb') {
+    try { await run('kv', 'readwrite', (s) => s.delete(key)); } catch { /* ignore */ }
+  } else if (mode === 'ls') {
+    try { localStorage.removeItem(`${LS_KEY}:${key}`); } catch { /* ignore */ }
+  } else memKV.delete(key);
+}
+
+/** Copies of the data left in localStorage (from an old fallback or a failed save). */
+export function localCopies() {
+  const out = [];
+  if (mode === 'ls') return out; // in ls mode these ARE the live data
+  for (const [key, label] of [[LS_KEY, 'ls'], [RESCUE_KEY, 'rescue']]) {
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw) out.push({ key: label, data: JSON.parse(raw) });
+    } catch { /* ignore */ }
+  }
+  return out;
 }
 
 export async function putFile(id, blob) {
@@ -154,5 +252,5 @@ export async function clearAll() {
       await run('kv', 'readwrite', (s) => s.clear());
     } catch { /* ignore */ }
   }
-  try { localStorage.removeItem(LS_KEY); } catch { /* ignore */ }
+  try { localStorage.removeItem(LS_KEY); localStorage.removeItem(RESCUE_KEY); } catch { /* ignore */ }
 }

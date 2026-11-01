@@ -1224,3 +1224,11 @@ mark { background: color-mix(in srgb, var(--accent) 22%, transparent); color: in
   .hero-num { font-size: 40px; }
   .countdown { padding: 10px; }
 }
+
+/* recovery */
+.recover-card { border: 1.5px solid color-mix(in srgb, var(--serious, #ff9500) 45%, transparent); }
+.recover-head { display: flex; align-items: center; gap: 10px; font-size: 16px; margin-bottom: 6px; }
+.recover-card p { margin: 0 0 12px; }
+.recover-row { display: flex; align-items: center; gap: 12px; padding: 12px 16px; }
+.recover-btns { display: flex; flex-direction: column; gap: 6px; flex: none; }
+.recover-peek { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 52vw; }

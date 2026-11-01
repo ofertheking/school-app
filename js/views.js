@@ -21,6 +21,7 @@ import { webtopRows } from './webtop.js';
 import { decksList } from './flashcards.js';
 import { filesGrid } from './files.js';
 import { notebooksGrid } from './notebooks.js';
+import { recoverCard } from './recover.js';
 
 // ---------- shared bits ----------
 
@@ -68,6 +69,16 @@ export function taskRow(t) {
       }${files ? ` · 📎 ${files}` : ''}${t.source === 'classroom' ? ' · <span class="badge">Classroom</span>' : ''}</span>
     </button>
     ${hasGrade(t) ? `<span class="task-grade">${esc(t.grade)}</span>` : ''}
+  </div>`;
+}
+
+/** Shown when the saved data couldn't be read — nothing is written until it can. */
+function loadFailedCard() {
+  if (!S.loadFailed) return '';
+  return `<div class="card recover-card">
+    <div class="recover-head">${tile('sync', 'red')}<b>לא הצלחתי לפתוח את הנתונים השמורים</b></div>
+    <p class="muted small">שום דבר לא נמחק, והאפליקציה לא תשמור כלום עד שהנתונים ייפתחו. סגור/י את האפליקציה לגמרי (החלקה למעלה) ופתח/י שוב.</p>
+    <button class="btn primary block" data-act="reload-app">לנסות שוב עכשיו</button>
   </div>`;
 }
 
@@ -157,8 +168,10 @@ export function home() {
       actions: `${iconBtn('go-search', ICON.search, 'חיפוש')}${iconBtn('go-more', ICON.gear, 'הגדרות')}`,
       sub: `${fmtDateLong(now)}${heb ? ` · ${heb}` : ''}`,
     })}
+    ${loadFailedCard()}
+    ${recoverCard()}
     ${installCard()}
-    ${onboardingCard()}
+    ${S.loadFailed ? '' : onboardingCard()}
     ${timerBanner()}
     ${studyCard}
     ${quick}
@@ -700,9 +713,10 @@ export function more() {
     <div class="card list">
       <button class="row-btn" data-act="export">${tile('share', 'blue')}<span class="grow">ייצוא גיבוי</span>${chev}</button>
       <label class="row-btn">${tile('cloud', 'indigo')}<span class="grow">שחזור מגיבוי</span>${chev}<input type="file" accept="application/json,.json" data-import hidden></label>
+      <button class="row-btn" data-act="recover-open">${tile('sync', 'orange')}<span class="grow">שחזור דברים שנעלמו<span class="sr-sub">מחפש עותקים קודמים במכשיר</span></span>${chev}</button>
       <button class="row-btn danger" data-act="reset">${tile('trash', 'red')}<span class="grow">מחיקת כל הנתונים</span></button>
     </div>
-    <p class="card-foot">הכל נשמר רק במכשיר הזה${mode === 'idb' ? '' : mode === 'ls' ? ' (אחסון מוגבל)' : '. <b>זה אחסון זמני בלבד בדפדפן הזה, והנתונים יימחקו כשסוגרים אותו</b>'}. כדאי לייצא גיבוי מדי פעם, למשל ל-iCloud Drive.</p>
+    <p class="card-foot">הכל נשמר רק במכשיר הזה, ועותק אוטומטי נשמר כל יום${mode === 'idb' ? '' : mode === 'ls' ? ' (אחסון מוגבל)' : '. <b>זה אחסון זמני בלבד בדפדפן הזה, והנתונים יימחקו כשסוגרים אותו</b>'}. כדאי לייצא גיבוי מדי פעם, למשל ל-iCloud Drive.</p>
 
     ${
       isStandalone()

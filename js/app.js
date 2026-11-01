@@ -1,6 +1,6 @@
 // Boot, routing, event wiring and all user actions.
 import {
-  S, load, save, saveNow, migrate, subject, exam, task, item, nextColor, timerElapsed,
+  S, load, save, saveNow, migrate, autoSnapshot, subject, exam, task, item, nextColor, timerElapsed,
   subjectName, EXAM_TYPES, createItem, deck,
   YEAR_KEYS, switchYear, addYear, renameYear, archiveCurrentYear,
 } from './core.js';
@@ -11,7 +11,7 @@ import {
 } from './util.js';
 import {
   openSheet, closeAllSheets, toast, askConfirm, formSheet, hydrateFiles, fileURL, forgetFileURL,
-  shareOrDownload, subjectOptions,
+  shareOrDownload, subjectOptions, choiceSheet,
 } from './ui.js';
 import * as V from './views.js';
 import { hooks } from './router.js';
@@ -23,6 +23,7 @@ import * as Files from './files.js';
 import * as Notebooks from './notebooks.js';
 import * as Search from './search.js';
 import * as Calendar from './calendar.js';
+import * as Recover from './recover.js';
 import { applyAppearance } from './appearance.js';
 import { ICON } from './icons.js';
 import {
@@ -606,6 +607,8 @@ async function importBackup(file) {
   for (const [yid, content] of Object.entries(p.years || {})) await saveState(content, `year:${yid}`);
   const keepWebtop = S.data.settings.webtop;
   S.data = migrate(p.data);
+  S.loaded = true;
+  S.loadFailed = false;
   if (keepWebtop?.pass) S.data.settings.webtop = keepWebtop;
   saveNow();
   applyAppearance();
@@ -646,12 +649,13 @@ const ACTIONS = {
     toast(`עברת לשנת ${y?.name || ''}`);
   },
   async 'year-add'() {
-    const copy = await askConfirm('להעתיק את המקצועות מהשנה הנוכחית לשנה החדשה?', {
-      ok: 'כן, עם המקצועות',
-      danger: false,
-      detail: 'השנה החדשה תתחיל ריקה ממבחנים, משימות וחומר. אפשר להעתיק רק את רשימת המקצועות כדי לא להתחיל מאפס.',
-    });
-    const y = await addYear('', { copySubjects: copy });
+    // Cancel / tapping outside must NOT create a year (that used to hide everything).
+    const pick = await choiceSheet('לפתוח שנת לימודים חדשה?', [
+      { value: 'subjects', label: 'שנה חדשה עם המקצועות', desc: 'מבחנים, משימות וחומר של השנה הנוכחית נשמרים בצד, ואפשר לחזור אליהם בכל רגע', icon: ICON.grad },
+      { value: 'empty', label: 'שנה חדשה ריקה', desc: 'בלי מקצועות. השנה הנוכחית נשמרת בצד', icon: ICON.plus },
+    ]);
+    if (!pick) return;
+    const y = await addYear('', { copySubjects: pick === 'subjects' });
     renameYear(y.id, y.name); // ensure persisted name
     closeAllSheets();
     navigate('#home');
@@ -933,10 +937,13 @@ const ACTIONS = {
 
   // backup
   export: () => exportBackup(),
+  'reload-app': () => location.reload(),
   async reset() {
     if (!(await askConfirm('למחוק את כל הנתונים?', { ok: 'מחיקת הכל', detail: 'אי אפשר לבטל. כדאי לייצא גיבוי קודם.' }))) return;
     await clearAll();
     S.data = migrate(null);
+    S.loaded = true;
+    S.loadFailed = false;
     saveNow();
     applyAppearance();
     navigate('#home');
@@ -944,7 +951,7 @@ const ACTIONS = {
   },
 };
 
-Object.assign(ACTIONS, Sched.actions, Cards.actions, Importer.actions, Webtop.actions, Files.actions, Notebooks.actions, Search.actions, Calendar.actions, {
+Object.assign(ACTIONS, Sched.actions, Cards.actions, Importer.actions, Webtop.actions, Files.actions, Notebooks.actions, Search.actions, Calendar.actions, Recover.actions, {
   'exam-link-items'({ id }) {
     const e = exam(id);
     const chosen = new Set(e.itemIds || []);
@@ -1175,6 +1182,11 @@ hooks.navigate = navigate;
 async function boot() {
   await initStore();
   await load();
+  if (S.loadFailed) {
+    // One more try after a moment — iOS sometimes needs it right after launch.
+    await new Promise((r) => setTimeout(r, 600));
+    await load();
+  }
   applyAppearance();
   const hadOAuth = /(^#|&)(access_token|error)=/.test(location.hash);
   if (hadOAuth) {
@@ -1183,6 +1195,14 @@ async function boot() {
   }
   render();
   document.documentElement.classList.add('ready');
+
+  // Daily safety copy, then look for anything that went missing.
+  autoSnapshot()
+    .then(() => Recover.scan())
+    .then(() => {
+      if (routeName() === 'home' && !document.querySelector('.sheet-wrap')) render();
+    })
+    .catch(() => {});
 
   if ('serviceWorker' in navigator) {
     try {

@@ -1,5 +1,5 @@
 // App state, persistence glue and read-only selectors.
-import { loadState, saveState } from './store.js';
+import { loadState, saveState, listStateKeys, deleteState } from './store.js';
 import { debounce, isoDate, parseISO, startOfDay, weekStart, addDays, daysUntil, uid } from './util.js';
 
 export const COLOR_COUNT = 8;
@@ -70,9 +70,40 @@ export const S = {
   },
 };
 
+/**
+ * Read the saved data. Until this succeeds nothing is ever written, so a slow
+ * or failed start can't overwrite the real data with an empty state.
+ */
 export async function load() {
-  const saved = await loadState();
-  S.data = migrate(saved);
+  try {
+    const saved = await loadState();
+    S.data = migrate(saved);
+    S.loaded = true;
+    S.loadFailed = false;
+  } catch (e) {
+    console.error('load failed', e);
+    S.data = migrate(null);
+    S.loaded = false;
+    S.loadFailed = true;
+  }
+}
+
+const hasContent = (d) => YEAR_KEYS.some((k) => k !== 'subjects' && d[k]?.length);
+
+/** Once a day, keep a copy of the data as it was when the app opened (last 10 days). */
+export async function autoSnapshot() {
+  if (!S.loaded || !hasContent(S.data)) return;
+  try {
+    const key = `snap:${isoDate()}`;
+    const snaps = (await listStateKeys()).filter((k) => k.startsWith('snap:')).sort();
+    if (!snaps.includes(key)) {
+      const snap = { currentYear: S.data.currentYear, takenAt: Date.now() };
+      for (const k of YEAR_KEYS) snap[k] = S.data[k];
+      await saveState(snap, key);
+      snaps.push(key);
+    }
+    for (const k of snaps.slice(0, Math.max(0, snaps.length - 10))) await deleteState(k);
+  } catch { /* best effort */ }
 }
 
 export function migrate(saved) {
@@ -95,7 +126,10 @@ export function migrate(saved) {
   return out;
 }
 
-const persist = debounce(() => saveState(S.data).catch(() => {}), 250);
+const persist = debounce(() => {
+  if (!S.loaded) return; // never write before the saved data was read
+  saveState(S.data).catch(() => {});
+}, 250);
 export const save = () => persist();
 export const saveNow = () => persist.flush();
 
@@ -344,11 +378,13 @@ function contentOf(data) {
 
 /** Persist the active year's content into its own archive record. */
 export async function archiveCurrentYear() {
+  if (!S.loaded) return;
   await saveState(contentOf(S.data), `year:${S.data.currentYear}`);
 }
 
 /** Switch the active school year. Archives the current one, loads the target. */
 export async function switchYear(yearId) {
+  if (!S.loaded) return;
   if (yearId === S.data.currentYear || !S.data.years.some((y) => y.id === yearId)) return;
   saveNow();
   await archiveCurrentYear();
@@ -361,10 +397,17 @@ export async function switchYear(yearId) {
 
 /** Create a new school year and switch to it. Optionally copy the current subjects. */
 export async function addYear(name, { copySubjects = false } = {}) {
+  if (!S.loaded) throw new Error('data not loaded');
   saveNow();
   await archiveCurrentYear();
   const subjectsCopy = copySubjects ? JSON.parse(JSON.stringify(S.data.subjects)) : [];
-  const y = { id: uid(), name: (name || schoolYearName()).trim() };
+  let auto = schoolYearName();
+  // Default to the year after the newest existing one, so two years never share a name.
+  while (!name && S.data.years.some((x) => x.name === auto)) {
+    const n = parseInt(auto, 10) + 1;
+    auto = `${n}/${String(n + 1).slice(2)}`;
+  }
+  const y = { id: uid(), name: (name || auto).trim(), createdAt: Date.now() };
   S.data.years.push(y);
   for (const k of YEAR_KEYS) S.data[k] = [];
   S.data.subjects = subjectsCopy;
