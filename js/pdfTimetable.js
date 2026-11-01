@@ -83,6 +83,18 @@ const cleanStr = (v) => String(v || '').replace(/\s+/g, ' ').trim();
 
 /** Clean a subject name from a timetable cell: drop (parentheses), "5 יח״ל",
  *  level/group markers and stray standalone numbers that aren't the subject. */
+/** Strip brackets, gershayim/backticks and long codes from teacher / room text. */
+function scrub(v) {
+  return String(v || '')
+    .replace(/[([{][^)\]}]*[)\]}]/g, ' ')
+    .replace(/[)\]}][^([{]*[([{]/g, ' ')
+    .replace(/[()[\]{}`]/g, ' ')
+    .replace(/\b\d{4,}\b/g, ' ') // long group/class codes (e.g. 3997)
+    .replace(/\s*[:·]\s*$/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 // Track / group / level words to drop (JS \b doesn't work on Hebrew, so match tokens).
 const DROP_TOKEN = /^(יחידות|יח|הקבצה|קבוצה|מגמה|רמה|\d{1,4}[א-ת]?)$/;
 function cleanSubject(v) {
@@ -90,11 +102,11 @@ function cleanSubject(v) {
     .replace(/[([{][^)\]}]*[)\]}]/g, ' ') // (…) normal order
     .replace(/[)\]}][^([{]*[([{]/g, ' ') // )…( reversed RTL glyph order
     .replace(/[()[\]{}]/g, ' ') // any leftover bracket char
-    .replace(/\d*\s*יח\s*["'׳״]?\s*ל?(?=\s|$)/g, ' ') // 5 יח"ל / יחל
-    .replace(/[-–—/|]+/g, ' ');
+    .replace(/\d*\s*יח\s*["'׳״`]*\s*ל?(?=\s|$)/g, ' ') // 5 יח"ל / יח``ל / יחל
+    .replace(/[-–—/|:]+/g, ' ');
   return s
     .split(/\s+/)
-    .filter((t) => t && !DROP_TOKEN.test(t.replace(/["'׳״.]/g, '')))
+    .filter((t) => t && !DROP_TOKEN.test(t.replace(/["'׳״`.:]/g, '')))
     .join(' ')
     .trim();
 }
@@ -194,28 +206,21 @@ export function parseTimetableItems(rawItems) {
     );
     const lineList = lines.filter(Boolean);
     if (!lineList.length) continue;
-    // Classify the cell's lines: room → subject (best dictionary match) → teacher (a name).
+    // Classify: pull out the room line and the teacher's name; everything else
+    // is the subject (it may span two lines, e.g. "מתמטיקה (רמה: 5" / "יח״ל)").
     let room = '';
     const rest = [];
     for (const line of lineList) {
       if (!room && (/(חדר|כיתה|מעבדה|אולם|מקלט|קומה)/.test(line) || /^\d{1,4}[א-ת]?$/.test(line))) room = line;
       else rest.push(line);
     }
-    let subject = '';
-    let teacher = '';
-    if (rest.length) {
-      // The line that reads most like a subject wins; prefer a non-name on ties.
-      let best = rest[0];
-      let bestScore = -1;
-      for (const line of rest) {
-        const sc = subjectScore(line) - (looksLikeName(line) ? 2 : 0);
-        if (sc > bestScore) { bestScore = sc; best = line; }
-      }
-      subject = best;
-      const others = rest.filter((l) => l !== best);
-      teacher = others.find(looksLikeName) || others[0] || '';
-    }
-    const cleanName = cleanSubject(subject.replace(TIME, ''));
+    // The best subject line (dictionary match, else the topmost line) is never the
+    // teacher; the teacher is a name line other than that one.
+    const scored = rest.map((l) => ({ l, sc: subjectScore(l) }));
+    const best = scored.reduce((a, b) => (b.sc > a.sc ? b : a), scored[0] || { l: '', sc: -1 });
+    const teacher = rest.find((l) => looksLikeName(l) && l !== best.l) || '';
+    const subjectParts = rest.filter((l) => l !== teacher);
+    const cleanName = cleanSubject(subjectParts.join(' ').replace(TIME, ''));
     if (!cleanName || cleanName.replace(/[^\p{L}]/gu, '').length < 2) continue;
     const times = [...lineList.join(' ').matchAll(TIME)].map((m) => `${pad(+m[1])}:${m[2]}`);
     lessons.push({
@@ -224,8 +229,8 @@ export function parseTimetableItems(rawItems) {
       start: cell.row.start || times[0] || '',
       end: cell.row.end || times[1] || '',
       subject: cleanName,
-      teacher: cleanStr(teacher),
-      room: cleanStr(room),
+      teacher: scrub(teacher),
+      room: scrub(room),
     });
   }
   lessons.sort((a, b) => a.day - b.day || (a.period ?? 99) - (b.period ?? 99));

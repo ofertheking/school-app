@@ -4,12 +4,14 @@ import { esc } from './util.js';
 import { ICON } from './icons.js';
 
 export function head(title, { back, actions = '', sub = '', navTitle } = {}) {
-  return `<header class="page-head">
-    <div class="head-bar">
-      ${back ? `<button class="icon-btn back" data-go="${back}" aria-label="חזרה">${ICON.back}</button>` : '<span></span>'}
+  return `<div class="navbar">
+    <div class="navbar-in">
+      ${back ? `<button class="icon-btn back" data-go="${back}" aria-label="חזרה">${ICON.back}</button>` : '<span class="nav-sp"></span>'}
       <div class="nav-title" aria-hidden="true">${esc(navTitle ?? title)}</div>
-      <div class="head-actions">${actions}</div>
+      <div class="head-actions">${actions || '<span class="nav-sp"></span>'}</div>
     </div>
+  </div>
+  <header class="page-head">
     <h1 class="large-title">${esc(title)}</h1>
     ${sub ? `<p class="subtitle">${sub}</p>` : ''}
   </header>`;

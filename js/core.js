@@ -133,14 +133,15 @@ export function readiness(e) {
 export function upcomingExams() {
   const today = isoDate();
   return S.data.exams
-    .filter((e) => e.date >= today)
+    .filter((e) => e.date >= today && !e.done)
     .sort((a, b) => (a.date + (a.time || '')).localeCompare(b.date + (b.time || '')));
 }
 
 export function pastExams() {
   const today = isoDate();
-  return S.data.exams.filter((e) => e.date < today).sort((a, b) => b.date.localeCompare(a.date));
+  return S.data.exams.filter((e) => e.date < today || e.done).sort((a, b) => b.date.localeCompare(a.date));
 }
+export const examFinished = (e) => !!e.done || daysUntil(e.date) < 0;
 
 export function openTasks() {
   return S.data.tasks

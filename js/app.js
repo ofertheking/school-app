@@ -722,6 +722,14 @@ const ACTIONS = {
     render();
   },
   'exam-cal': ({ id }) => calendarSheet(exam(id)),
+  'exam-done'({ id }) {
+    const e = exam(id);
+    e.done = !e.done;
+    if (e.done && !e.doneAt) e.doneAt = Date.now();
+    save();
+    render();
+    toast(e.done ? 'המבחן סומן כהושלם ✓' : 'חזר למבחנים הקרובים');
+  },
   'exam-study'({ id }) {
     const e = exam(id);
     if (S.data.timer) {

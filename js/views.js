@@ -32,12 +32,13 @@ function statVal(min) {
 export function examCard(e) {
   const r = readiness(e);
   const n = daysUntil(e.date);
-  const past = n < 0;
-  const right = past
-    ? e.grade !== '' && e.grade != null
+  const past = n < 0 || e.done;
+  const right =
+    e.grade !== '' && e.grade != null
       ? `<span class="grade">${esc(e.grade)}</span>`
-      : `<span class="chip">אין ציון</span>`
-    : `<span class="chip ${examUrgency(e)}">${relDay(e.date)}</span>`;
+      : past
+      ? `<span class="chip done">✓ נגמר</span>`
+      : `<span class="chip ${examUrgency(e)}">${relDay(e.date)}</span>`;
   return `<button class="card exam-card" data-go="#exam-${e.id}">
     <span class="stripe" style="background:${subjectColor(e.subjectId)}"></span>
     <span class="exam-main">
@@ -210,13 +211,16 @@ export function examDetail(id) {
   const e = exam(id);
   if (!e) return notFound('#exams');
   const n = daysUntil(e.date);
-  const past = n < 0;
+  const past = n < 0 || e.done;
   const r = readiness(e);
   const topics = e.topics || [];
   const mastered = topics.filter((t) => t.s === 2).length;
   const studied = minutesBetween(0, Date.now() + 1, { examId: e.id });
   const linked = (e.itemIds || []).map((x) => item(x)).filter(Boolean);
-  const big = n > 1 ? `<b class="hero-num">${n}</b><span>ימים למבחן</span>` : n === 1 ? `<b class="hero-num">מחר</b><span>בהצלחה!</span>` : n === 0 ? `<b class="hero-num">היום</b><span>בהצלחה! 🍀</span>` : `<b class="hero-num">${e.grade !== '' && e.grade != null ? esc(e.grade) : '—'}</b><span>ציון</span>`;
+  const hasGrade = e.grade !== '' && e.grade != null;
+  const big = past
+    ? `<b class="hero-num">${hasGrade ? esc(e.grade) : '✓'}</b><span>${hasGrade ? 'ציון' : 'המבחן נגמר'}</span>`
+    : n > 1 ? `<b class="hero-num">${n}</b><span>ימים למבחן</span>` : n === 1 ? `<b class="hero-num">מחר</b><span>בהצלחה!</span>` : `<b class="hero-num">היום</b><span>בהצלחה! 🍀</span>`;
 
   const material = section(
     'החומר למבחן',
@@ -303,7 +307,8 @@ export function examDetail(id) {
     ${past ? '' : paper}
 
     <div class="actions-col">
-      <button class="btn tinted block" data-act="exam-cal" data-id="${e.id}">${ICON.calendar} הוספה ליומן עם תזכורת</button>
+      <button class="btn ${e.done ? 'ghost' : 'tinted'} block" data-act="exam-done" data-id="${e.id}">${e.done ? '↩︎ המבחן עוד לא נגמר' : '✓ סימון שהמבחן נגמר'}</button>
+      ${n >= 0 && !e.done ? `<button class="btn tinted block" data-act="exam-cal" data-id="${e.id}">${ICON.calendar} הוספה ליומן עם תזכורת</button>` : ''}
       ${e.link ? `<a class="btn ghost block" href="${esc(e.link)}" target="_blank" rel="noopener">${ICON.ext} פתיחה ב-Classroom</a>` : ''}
       <button class="btn danger-ghost block" data-act="del-exam" data-id="${e.id}">${ICON.trash} מחיקת המבחן</button>
     </div>
