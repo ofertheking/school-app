@@ -2,8 +2,9 @@
 import {
   S, load, save, saveNow, migrate, subject, exam, task, item, nextColor, timerElapsed,
   subjectName, EXAM_TYPES, createItem, deck,
+  YEAR_KEYS, switchYear, addYear, renameYear, archiveCurrentYear,
 } from './core.js';
-import { initStore, putFile, getFile, deleteFile, clearAll } from './store.js';
+import { initStore, putFile, getFile, deleteFile, clearAll, loadState, saveState } from './store.js';
 import {
   uid, esc, isoDate, parseISO, fmtMin, fmtClock, compressImage, blobToDataURL, dataURLToBlob,
   fmtDate,
@@ -189,6 +190,7 @@ function examForm(e, presetSubject, presetDate = '') {
       { name: 'time', label: 'שעה (לא חובה)', type: 'time', half: true },
       ...(isNew
         ? [
+            { name: 'grade', label: 'ציון (אם המבחן כבר היה)', type: 'number', inputmode: 'decimal', min: 0, max: 100, half: true, placeholder: '—' },
             { name: 'topics', label: 'החומר למבחן — שורה לכל נושא', type: 'textarea', rows: 4, placeholder: 'פונקציות\nנגזרות\nתרגילים מהחוברת עמ׳ 20–35' },
             { name: 'files', label: 'דף חומר / PDF / צילומים (לא חובה)', type: 'files', accept: 'image/*,application/pdf,.doc,.docx,.ppt,.pptx' },
           ]
@@ -198,7 +200,8 @@ function examForm(e, presetSubject, presetDate = '') {
       if (isNew) {
         const ex = {
           id: uid(), subjectId: v.subjectId, title: v.title || `${v.type} ב${subjectName(v.subjectId)}`,
-          type: v.type, date: v.date, time: v.time, notes: '', grade: '', source: 'manual', createdAt: Date.now(),
+          type: v.type, date: v.date, time: v.time, notes: '', grade: v.grade === '' || v.grade == null ? '' : v.grade,
+          source: 'manual', createdAt: Date.now(),
           topics: splitLines(v.topics).map((text) => ({ id: uid(), text, s: 0 })),
         };
         S.data.exams.push(ex);
@@ -530,18 +533,33 @@ async function runClassroomSync(token) {
 
 // ---------------------------------------------------------------- backup
 
+/** Every file id referenced by a year's content (items, exams). */
+function fileIdsIn(content) {
+  const ids = [];
+  for (const it of content.items || []) for (const f of it.files || []) ids.push(f.id);
+  for (const e of content.exams || []) for (const f of [...(e.materialFiles || []), ...(e.paperFiles || [])]) ids.push(f.id);
+  return ids;
+}
+
 async function exportBackup() {
-  toast('מכין גיבוי…', 1500);
-  const files = {};
-  for (const it of S.data.items) {
-    for (const f of it.files || []) {
-      const b = await getFile(f.id);
-      if (b) files[f.id] = await blobToDataURL(b);
-    }
+  toast('מכין גיבוי…', 2000);
+  await archiveCurrentYear(); // make sure the active year's archive is current
+  const years = {};
+  for (const y of S.data.years) {
+    if (y.id === S.data.currentYear) continue;
+    const c = await loadState(`year:${y.id}`);
+    if (c) years[y.id] = c;
   }
   const data = JSON.parse(JSON.stringify(S.data));
   if (data.settings?.webtop) data.settings.webtop.pass = '';
-  const payload = { app: 'school-app', version: 1, exportedAt: new Date().toISOString(), data, files };
+  // collect files across the active year + all archived years
+  const files = {};
+  const ids = new Set([...fileIdsIn(data), ...Object.values(years).flatMap(fileIdsIn)]);
+  for (const id of ids) {
+    const b = await getFile(id);
+    if (b) files[id] = await blobToDataURL(b);
+  }
+  const payload = { app: 'school-app', version: 2, exportedAt: new Date().toISOString(), data, years, files };
   const file = new File([JSON.stringify(payload)], `school-backup-${isoDate()}.json`, { type: 'application/json' });
   await shareOrDownload(file);
 }
@@ -561,6 +579,7 @@ async function importBackup(file) {
   if (!(await askConfirm('לשחזר מהגיבוי?', { ok: 'שחזור', danger: false, detail: 'כל מה שיש עכשיו באפליקציה יוחלף בתוכן הגיבוי.' }))) return;
   await clearAll();
   for (const [id, url] of Object.entries(p.files || {})) await putFile(id, dataURLToBlob(url));
+  for (const [yid, content] of Object.entries(p.years || {})) await saveState(content, `year:${yid}`);
   const keepWebtop = S.data.settings.webtop;
   S.data = migrate(p.data);
   if (keepWebtop?.pass) S.data.settings.webtop = keepWebtop;
@@ -591,6 +610,42 @@ const ACTIONS = {
     render();
   },
   'gc-open': () => openSheet(V.classroomSheetHTML(), { tall: true }),
+  'year-open': () => openSheet(V.yearSheetHTML(), { tall: true }),
+  async 'year-switch'({ id }) {
+    if (id === S.data.currentYear) return closeAllSheets();
+    const y = S.data.years.find((x) => x.id === id);
+    closeAllSheets();
+    const close = openSheet(`<div class="progress-sheet"><div class="spinner" aria-hidden="true"></div><p>עובר ל${esc(y?.name || 'שנה')}…</p></div>`);
+    await switchYear(id);
+    close();
+    navigate('#home');
+    toast(`עברת לשנת ${y?.name || ''}`);
+  },
+  async 'year-add'() {
+    const copy = await askConfirm('להעתיק את המקצועות מהשנה הנוכחית לשנה החדשה?', {
+      ok: 'כן, עם המקצועות',
+      danger: false,
+      detail: 'השנה החדשה תתחיל ריקה ממבחנים, משימות וחומר. אפשר להעתיק רק את רשימת המקצועות כדי לא להתחיל מאפס.',
+    });
+    const y = await addYear('', { copySubjects: copy });
+    renameYear(y.id, y.name); // ensure persisted name
+    closeAllSheets();
+    navigate('#home');
+    toast(`נפתחה שנת ${y.name}. אפשר לשנות את השם בהגדרות.`);
+  },
+  'year-rename'({ id }) {
+    const y = S.data.years.find((x) => x.id === id);
+    if (!y) return;
+    formSheet({
+      title: 'שם השנה',
+      values: { name: y.name },
+      fields: [{ name: 'name', label: 'שם שנת הלימודים', required: true, placeholder: 'למשל: 2026/27 או י״א' }],
+      onSubmit(v) {
+        renameYear(id, v.name);
+        render();
+      },
+    });
+  },
   seg({ key, val }) {
     S.ui[key] = val;
     render();

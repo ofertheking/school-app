@@ -1,5 +1,5 @@
 // Weekly timetable (מערכת שעות): views + actions.
-import { S, save, subjectName, subjectColor, ensureSubject } from './core.js';
+import { S, save, subjectName, subjectColor, ensureSubject, replaceSubjects } from './core.js';
 import { esc, uid, isoDate, addDays, startOfDay, pad, fmtDate, DAY_LETTERS } from './util.js';
 import { formSheet, openSheet, askConfirm, closeAllSheets, toast } from './ui.js';
 import { parseTimetablePdf } from './pdfTimetable.js';
@@ -158,6 +158,7 @@ function previewSheet(found) {
      <p class="small"><b>מצאתי ${rows.length} שיעורים</b>. אפשר לתקן שמות או לבטל שיעורים לפני השמירה.</p>
      <div class="imp-lessons">${html()}</div>
      ${hasExisting ? `<label class="toggle-row"><input type="checkbox" data-replace checked> להחליף את המערכת הקיימת</label>` : ''}
+     <label class="toggle-row"><input type="checkbox" data-replace-subjects> לאפס את רשימת המקצועות ולהשתמש רק במקצועות שבמערכת</label>
      <button class="btn primary block" data-save>שמירת המערכת</button>`,
     {
       tall: true,
@@ -172,6 +173,9 @@ function previewSheet(found) {
         sheet.querySelector('[data-save]').addEventListener('click', () => {
           const keep = rows.filter((r) => r.on && r.subject.trim());
           if (!keep.length) return toast('לא נבחרו שיעורים');
+          if (sheet.querySelector('[data-replace-subjects]')?.checked) {
+            replaceSubjects(keep.map((r) => r.subject.trim()));
+          }
           if (!hasExisting || sheet.querySelector('[data-replace]')?.checked) S.data.lessons = [];
           for (const r of keep) {
             S.data.lessons.push({

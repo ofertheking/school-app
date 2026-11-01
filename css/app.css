@@ -1108,6 +1108,12 @@ mark { background: color-mix(in srgb, var(--accent) 22%, transparent); color: in
 .cal-day-head h2 { font-size: 20px; margin: 0; }
 .cal-tasks { margin-top: 10px; }
 
+/* ---------- school years ---------- */
+.year-row { gap: 10px; }
+.year-pick { display: flex; align-items: center; gap: 8px; text-align: start; font-size: 17px; cursor: pointer; }
+.check-mark { color: var(--accent); display: flex; }
+.check-mark svg { width: 20px; height: 20px; }
+
 /* ---------- phone in landscape: compact chrome so content has room ---------- */
 @media (orientation: landscape) and (max-height: 500px) {
   :root { --tabbar-h: 40px; }

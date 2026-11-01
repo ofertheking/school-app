@@ -61,31 +61,33 @@ export async function initStore() {
 
 export const storageMode = () => mode;
 
-export async function loadState() {
+const memKV = new Map(); // key -> state, for the mem fallback (key !== 'state')
+
+export async function loadState(key = 'state') {
   if (mode === 'idb') {
     try {
-      return await run('kv', 'readonly', (s) => s.get('state'));
+      return await run('kv', 'readonly', (s) => s.get(key));
     } catch {
       mode = 'ls';
     }
   }
   if (mode === 'ls') {
     try {
-      const raw = localStorage.getItem(LS_KEY);
+      const raw = localStorage.getItem(key === 'state' ? LS_KEY : `${LS_KEY}:${key}`);
       return raw ? JSON.parse(raw) : null;
     } catch {
       mode = 'mem';
     }
   }
-  return memState;
+  return key === 'state' ? memState : memKV.get(key) || null;
 }
 
-export async function saveState(state) {
+export async function saveState(state, key = 'state') {
   // Store a plain clone so IndexedDB never sees non-cloneable values.
   const plain = JSON.parse(JSON.stringify(state));
   if (mode === 'idb') {
     try {
-      await run('kv', 'readwrite', (s) => s.put(plain, 'state'));
+      await run('kv', 'readwrite', (s) => s.put(plain, key));
       return;
     } catch {
       mode = 'ls';
@@ -93,13 +95,14 @@ export async function saveState(state) {
   }
   if (mode === 'ls') {
     try {
-      localStorage.setItem(LS_KEY, JSON.stringify(plain));
+      localStorage.setItem(key === 'state' ? LS_KEY : `${LS_KEY}:${key}`, JSON.stringify(plain));
       return;
     } catch {
       mode = 'mem';
     }
   }
-  memState = plain;
+  if (key === 'state') memState = plain;
+  else memKV.set(key, plain);
 }
 
 export async function putFile(id, blob) {

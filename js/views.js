@@ -2,7 +2,7 @@
 import {
   S, subject, subjectName, subjectColor, readiness, upcomingExams, pastExams, openTasks,
   gradeAverage, todayMinutes, weekDays, weekBySubject, streak, timerElapsed, examUrgency,
-  dueLabelGroup, itemKind, exam, item, minutesBetween, COMMON_SUBJECTS,
+  dueLabelGroup, itemKind, exam, item, minutesBetween, COMMON_SUBJECTS, currentYear,
 } from './core.js';
 import {
   esc, fmtDate, fmtDateLong, fmtHebrewDate, fmtMin, fmtClock, relDay, daysUntil, greeting,
@@ -604,6 +604,12 @@ export function more() {
       </div>
     </div>
 
+    <h3 class="group-title">שנת לימודים</h3>
+    <div class="card list">
+      <button class="row-btn" data-act="year-open">${tile('grad', 'indigo')}<span class="grow">שנה נוכחית<span class="sr-sub">מעבר בין שנים, או פתיחת שנה חדשה</span></span>
+        <span class="row-val">${esc(currentYear()?.name || '')}</span><span class="chev">${ICON.fwd}</span></button>
+    </div>
+
     <h3 class="group-title">מקצועות</h3>
     <div class="card list">
       ${d.subjects
@@ -673,6 +679,25 @@ export function classroomSheetHTML() {
       </ol>
       <p class="muted small">לחיצה על כתובת מעתיקה אותה. בחשבון של בית ספר, מנהל המערכת יכול לחסום אפליקציות חיצוניות.</p>
     </details>`;
+}
+
+/** School-year picker shown in a sheet. */
+export function yearSheetHTML() {
+  const d = S.data;
+  const cur = d.currentYear;
+  return `<div class="sheet-head"><button type="button" class="link-btn" data-close>סגירה</button><h3>שנת לימודים</h3><span></span></div>
+    <p class="muted small">כל שנה שומרת מערכת, מבחנים, ציונים וחומר נפרדים. אפשר לעבור בין שנים בכל רגע.</p>
+    <div class="card list">
+      ${d.years
+        .map(
+          (y) => `<div class="row-btn year-row">${tile('grad', y.id === cur ? 'indigo' : 'gray')}
+            <button class="grow year-pick" data-act="year-switch" data-id="${y.id}">${esc(y.name)}${y.id === cur ? ' <span class="chip cool">נוכחית</span>' : ''}</button>
+            <button class="icon-btn sm" data-act="year-rename" data-id="${y.id}" aria-label="שינוי שם">${ICON.edit}</button>
+            ${y.id === cur ? `<span class="check-mark">${ICON.check}</span>` : ''}</div>`
+        )
+        .join('')}
+      <button class="row-btn accent" data-act="year-add"><span class="tile-ico t-gray" aria-hidden="true">${ICON.plus}</span><span class="grow">הוספת שנה חדשה</span></button>
+    </div>`;
 }
 
 export function notFound(back) {

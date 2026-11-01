@@ -53,6 +53,26 @@ function dayOf(text) {
   return null;
 }
 
+const cleanStr = (v) => String(v || '').replace(/\s+/g, ' ').trim();
+
+/** Clean a subject name from a timetable cell: drop (parentheses), "5 יח״ל",
+ *  level/group markers and stray standalone numbers that aren't the subject. */
+// Track / group / level words to drop (JS \b doesn't work on Hebrew, so match tokens).
+const DROP_TOKEN = /^(יחידות|יח|הקבצה|קבוצה|מגמה|רמה|\d{1,4}[א-ת]?)$/;
+function cleanSubject(v) {
+  const s = String(v || '')
+    .replace(/[([{][^)\]}]*[)\]}]/g, ' ') // (…) normal order
+    .replace(/[)\]}][^([{]*[([{]/g, ' ') // )…( reversed RTL glyph order
+    .replace(/[()[\]{}]/g, ' ') // any leftover bracket char
+    .replace(/\d*\s*יח\s*["'׳״]?\s*ל?(?=\s|$)/g, ' ') // 5 יח"ל / יחל
+    .replace(/[-–—/|]+/g, ' ');
+  return s
+    .split(/\s+/)
+    .filter((t) => t && !DROP_TOKEN.test(t.replace(/["'׳״.]/g, '')))
+    .join(' ')
+    .trim();
+}
+
 /**
  * items: [{ str, x, y, w, h }] in PDF coordinates (y grows upwards).
  * Returns { lessons: [{day, period, start, end, subject, teacher, room}], reversed, days, rows }.
@@ -96,35 +116,33 @@ export function parseTimetableItems(rawItems) {
   const headerY = header.v;
   const body = items.filter((i) => i.y < headerY - fontH * 0.4 && !header.members.includes(i));
 
-  // 3. Row anchors: hour numbers or times outside the day columns.
+  // 3. Rows come from the lesson CONTENT itself (every band of text in the day
+  //    columns is a row), so no period is ever missed — not from the hour
+  //    numbers, which may stop early or be formatted differently further down.
   const anchorItems = body.filter((i) => !colOf(i) && (/^\d{1,2}$/.test(i.str) || /\d{1,2}[:.]\d{2}/.test(i.str)));
-  let rows = cluster(anchorItems, (i) => i.y, fontH * 1.2).map((g) => {
+  const anchorRows = cluster(anchorItems, (i) => i.y, fontH * 1.4).map((g) => {
     const text = g.members.map((m) => m.str).join(' ');
     const num = g.members.map((m) => m.str).find((s) => /^\d{1,2}$/.test(s));
     const times = [...text.matchAll(TIME)].map((m) => `${pad(+m[1])}:${m[2]}`);
     return { y: g.v, period: num != null ? +num : null, start: times[0] || '', end: times[1] || '' };
   });
-  // Times stacked under the hour number land in their own cluster — merge them into the row above.
-  rows = rows.reduce((acc, r) => {
-    const prev = acc[acc.length - 1];
-    if (prev && r.period == null && prev.y - r.y < fontH * 2.6 && (!prev.start || !prev.end)) {
-      prev.start = prev.start || r.start;
-      prev.end = prev.end || r.end || (r.start && prev.start ? r.start : '');
-      return acc;
-    }
-    acc.push(r);
-    return acc;
-  }, []);
 
   const content = body.filter((i) => colOf(i) && !anchorItems.includes(i));
-  if (rows.length < 2) {
-    // No explicit hour column: every vertical block of text is a row.
-    rows = cluster(content, (i) => i.y, fontH * 2.2).map((g, idx) => ({ y: g.v, period: idx + 1, start: '', end: '' }));
-  }
-  rows.sort((a, b) => b.y - a.y);
+  let rows = cluster(content, (i) => i.y, fontH * 1.8).map((g) => ({ y: g.v, members: g.members }));
+  rows.sort((a, b) => b.y - a.y); // top of page → bottom
+  // Match each content row to the nearest hour anchor for its period / start / end.
   rows.forEach((r, i) => {
-    r.top = i === 0 ? r.y + fontH * 3 : (rows[i - 1].y + r.y) / 2;
-    r.bottom = i === rows.length - 1 ? r.y - fontH * 3 : (r.y + rows[i + 1].y) / 2;
+    let best = null;
+    let bestD = fontH * 3.2;
+    for (const a of anchorRows) {
+      const d = Math.abs(a.y - r.y);
+      if (d < bestD) { bestD = d; best = a; }
+    }
+    r.period = best && best.period != null ? best.period : i + 1;
+    r.start = best ? best.start : '';
+    r.end = best ? best.end : '';
+    r.top = i === 0 ? Infinity : (rows[i - 1].y + r.y) / 2;
+    r.bottom = i === rows.length - 1 ? -Infinity : (r.y + rows[i + 1].y) / 2;
   });
 
   // 4. Fill the cells.
@@ -158,16 +176,17 @@ export function parseTimetableItems(rawItems) {
       else if (!subject) subject = line;
       else if (!teacher) teacher = line;
     }
-    if (!subject) continue;
+    const cleanName = cleanSubject(subject.replace(TIME, ''));
+    if (!cleanName || cleanName.replace(/[^\p{L}]/gu, '').length < 2) continue;
     const times = [...lineList.join(' ').matchAll(TIME)].map((m) => `${pad(+m[1])}:${m[2]}`);
     lessons.push({
       day: cell.day,
       period: cell.row.period,
       start: cell.row.start || times[0] || '',
       end: cell.row.end || times[1] || '',
-      subject: subject.replace(TIME, '').replace(/\s*[-–]\s*$/, '').trim(),
-      teacher,
-      room,
+      subject: cleanName,
+      teacher: cleanStr(teacher),
+      room: cleanStr(room),
     });
   }
   lessons.sort((a, b) => a.day - b.day || (a.period ?? 99) - (b.period ?? 99));

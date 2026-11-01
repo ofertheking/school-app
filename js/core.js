@@ -32,8 +32,19 @@ function defaults() {
       webtop: { url: '', user: '', pass: '', lastSync: null, name: '' },
       appearance: { theme: 'system', accent: 'blue' },
     },
+    years: [],
+    currentYear: '',
     timer: null,
   };
+}
+
+// Content that belongs to one school year (everything but profile/settings/years).
+export const YEAR_KEYS = ['subjects', 'exams', 'tasks', 'sessions', 'items', 'lessons', 'decks', 'cards'];
+
+/** Israeli school year label for a date, e.g. "2026/27" (starts ~September). */
+export function schoolYearName(d = new Date()) {
+  const start = d.getMonth() >= 7 ? d.getFullYear() : d.getFullYear() - 1;
+  return `${start}/${String(start + 1).slice(2)}`;
 }
 
 export const S = {
@@ -66,15 +77,21 @@ export async function load() {
 
 export function migrate(saved) {
   const d = defaults();
-  if (!saved || typeof saved !== 'object') return d;
+  if (!saved || typeof saved !== 'object') saved = {};
   const out = { ...d, ...saved };
   out.profile = { ...d.profile, ...(saved.profile || {}) };
   out.settings = { ...d.settings, ...(saved.settings || {}) };
   out.settings.webtop = { ...d.settings.webtop, ...(saved.settings?.webtop || {}) };
   out.settings.appearance = { ...d.settings.appearance, ...(saved.settings?.appearance || {}) };
-  for (const k of ['subjects', 'exams', 'tasks', 'sessions', 'items', 'lessons', 'decks', 'cards']) {
+  for (const k of YEAR_KEYS) {
     if (!Array.isArray(out[k])) out[k] = [];
   }
+  if (!Array.isArray(out.years) || !out.years.length) {
+    const id = uid();
+    out.years = [{ id, name: schoolYearName() }];
+    out.currentYear = id;
+  }
+  if (!out.years.some((y) => y.id === out.currentYear)) out.currentYear = out.years[0].id;
   return out;
 }
 
@@ -267,8 +284,85 @@ export function ensureSubject(name) {
   return s.id;
 }
 
+/**
+ * Replace the whole subject list with a fresh set built from `names`.
+ * Existing exams/tasks/items/sessions/decks are re-pointed to the new subject
+ * with a matching name, or unlinked (kept, but with no subject) if none matches.
+ */
+export function replaceSubjects(names) {
+  const seen = [];
+  const fresh = [];
+  for (const raw of names) {
+    const name = String(raw || '').trim();
+    if (!name || fresh.some((s) => sameSubject(s.name, name))) continue;
+    fresh.push({ id: uid(), name, color: fresh.length % COLOR_COUNT });
+    seen.push(name);
+  }
+  const remap = (oldId) => {
+    const old = S.data.subjects.find((s) => s.id === oldId);
+    if (!old) return '';
+    const m = fresh.find((s) => sameSubject(s.name, old.name));
+    return m ? m.id : '';
+  };
+  for (const k of ['exams', 'tasks', 'items', 'sessions', 'decks']) {
+    for (const rec of S.data[k]) rec.subjectId = remap(rec.subjectId);
+  }
+  S.data.subjects = fresh;
+  save();
+}
+
 // ---------- flashcards ----------
 export const deck = (id) => S.data.decks.find((d) => d.id === id);
 export const deckCards = (id) => S.data.cards.filter((c) => c.deckId === id);
 export const isDue = (c) => !c.due || c.due <= isoDate();
 export const dueCount = (id) => deckCards(id).filter(isDue).length;
+
+// ---------- school years ----------
+
+export const currentYear = () => S.data.years.find((y) => y.id === S.data.currentYear) || S.data.years[0];
+
+function contentOf(data) {
+  const o = {};
+  for (const k of YEAR_KEYS) o[k] = data[k];
+  return o;
+}
+
+/** Persist the active year's content into its own archive record. */
+export async function archiveCurrentYear() {
+  await saveState(contentOf(S.data), `year:${S.data.currentYear}`);
+}
+
+/** Switch the active school year. Archives the current one, loads the target. */
+export async function switchYear(yearId) {
+  if (yearId === S.data.currentYear || !S.data.years.some((y) => y.id === yearId)) return;
+  saveNow();
+  await archiveCurrentYear();
+  const loaded = (await loadState(`year:${yearId}`)) || {};
+  for (const k of YEAR_KEYS) S.data[k] = Array.isArray(loaded[k]) ? loaded[k] : [];
+  S.data.currentYear = yearId;
+  S.data.timer = null;
+  saveNow();
+}
+
+/** Create a new school year and switch to it. Optionally copy the current subjects. */
+export async function addYear(name, { copySubjects = false } = {}) {
+  saveNow();
+  await archiveCurrentYear();
+  const subjectsCopy = copySubjects ? JSON.parse(JSON.stringify(S.data.subjects)) : [];
+  const y = { id: uid(), name: (name || schoolYearName()).trim() };
+  S.data.years.push(y);
+  for (const k of YEAR_KEYS) S.data[k] = [];
+  S.data.subjects = subjectsCopy;
+  S.data.currentYear = y.id;
+  S.data.timer = null;
+  saveNow();
+  return y;
+}
+
+export function renameYear(yearId, name) {
+  const y = S.data.years.find((x) => x.id === yearId);
+  if (y && name.trim()) {
+    y.name = name.trim();
+    save();
+  }
+}

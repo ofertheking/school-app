@@ -35,8 +35,10 @@ function spark(values, color) {
 export function gradesView(examCard) {
   const all = graded();
   const past = pastExams();
+  const addBtn = `<button class="btn tinted block" data-act="add-exam">${ICON.plus} הוספת מבחן וציון שכבר היו</button>`;
   if (!all.length) {
-    return `${empty('chart', 'עוד אין ציונים. אחרי מבחן רושמים את הציון בעמוד המבחן, והממוצעים יופיעו כאן.')}
+    return `${empty('chart', 'עוד אין ציונים. מוסיפים מבחן עם תאריך שכבר עבר ורושמים את הציון, והממוצעים יופיעו כאן.')}
+      <div class="pad">${addBtn}</div>
       ${past.length ? section('מבחנים שעברו', `<div class="stack">${past.map(examCard).join('')}</div>`) : ''}`;
   }
   const overall = avg(all);
@@ -91,5 +93,6 @@ export function gradesView(examCard) {
         .join('')}</div>`
     )}
     ${past.some((e) => !all.includes(e)) ? section('עדיין בלי ציון', `<div class="stack">${past.filter((e) => !all.includes(e)).map(examCard).join('')}</div>`) : ''}
+    <div class="pad">${addBtn}</div>
   `;
 }
