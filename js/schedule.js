@@ -44,27 +44,100 @@ export function nextLessonDate(subjectId) {
   return isoDate(addDays(d, 7));
 }
 
-function lessonRow(l, list) {
+/** The date (ISO) of the next time this weekday comes around — today counts. */
+function upcomingDateOf(day) {
+  const d = startOfDay();
+  return isoDate(addDays(d, (day - d.getDay() + 7) % 7));
+}
+
+/** Homework due / exam on that date for the lesson's subject. */
+function lessonBadges(l, date) {
+  if (!date || !l.subjectId) return '';
+  const ex = S.data.exams.some((e) => e.subjectId === l.subjectId && e.date === date && !e.done);
+  const hw = S.data.tasks.some((t) => t.subjectId === l.subjectId && t.due === date && !t.done);
+  return `${ex ? ' <span class="chip hot">מבחן</span>' : ''}${hw ? ' <span class="chip warm">להגשה</span>' : ''}`;
+}
+
+function lessonRow(l, list, date) {
   const st = lessonState(l, list);
   const time = l.start ? `<bdi>${esc(l.start)}${l.end ? `–${esc(l.end)}` : ''}</bdi>` : '';
   return `<button class="lesson-row${st ? ` ${st}` : ''}" data-act="lesson-open" data-id="${l.id}">
     <span class="lesson-num">${l.period ?? ''}</span>
     <span class="stripe" style="background:${subjectColor(l.subjectId)}"></span>
     <span class="lesson-body">
-      <span class="lesson-title">${esc(lessonName(l))}${st === 'now' ? ' <span class="chip cool">עכשיו</span>' : st === 'next' ? ' <span class="chip">הבא</span>' : ''}</span>
+      <span class="lesson-title">${esc(lessonName(l))}${st === 'now' ? ' <span class="chip cool">עכשיו</span>' : st === 'next' ? ' <span class="chip">הבא</span>' : ''}${lessonBadges(l, date)}</span>
       <span class="lesson-meta">${[time, esc(l.teacher || ''), esc(l.room || '')].filter(Boolean).join(' · ')}</span>
     </span>
   </button>`;
 }
 
-/** Home-screen card: today's lessons. */
+/** Which day the home card shows by default: today, or the next school day once today's lessons are over. */
+function homeDefaultDay(now = new Date()) {
+  const today = now.getDay();
+  const list = lessonsOn(today);
+  const lastEnd = list.reduce((m, l) => (l.end && l.end > m ? l.end : m), '');
+  const over = today === 6 || (list.length && lastEnd && hhmm(now) >= lastEnd);
+  if (!over) return today;
+  for (let i = 1; i <= 7; i++) {
+    const d = (today + i) % 7;
+    if (lessonsOn(d).length) return d;
+  }
+  return today;
+}
+
+/** The day picked on the home card — only remembered for the same calendar day. */
+export function homeDay() {
+  const h = S.ui.homeDay;
+  return h && h.on === isoDate() ? h.day : homeDefaultDay();
+}
+
+function dayLabel(day) {
+  const today = new Date().getDay();
+  if (day === today) return 'היום במערכת';
+  if (day === (today + 1) % 7) return 'מחר במערכת';
+  return `יום ${DAY_NAMES[day]} במערכת`;
+}
+
+/** Switch the home card to another day; dir (±1) slides it in from that side. */
+export function setHomeDay(day, dir = 0) {
+  const cur = homeDay();
+  if (day === cur) return;
+  S.ui.homeDay = { day, on: isoDate() };
+  S.ui.homeDayDir = dir || (SCHOOL_DAYS.indexOf(day) > SCHOOL_DAYS.indexOf(cur) ? 1 : -1);
+  rerender();
+}
+
+/** Swipe on the home card: next / previous school day. */
+export function stepHomeDay(step) {
+  const i = SCHOOL_DAYS.indexOf(homeDay());
+  const j = Math.min(SCHOOL_DAYS.length - 1, Math.max(0, (i === -1 ? 0 : i) + step));
+  setHomeDay(SCHOOL_DAYS[j], step);
+}
+
+/** Home-screen card: a day of the timetable, with a day switcher (tap or swipe). */
 export function todaySection() {
   if (!S.data.lessons.length) return '';
-  const day = new Date().getDay();
+  const day = homeDay();
+  const today = new Date().getDay();
   const list = lessonsOn(day);
-  const headRow = `<button class="sum-head today-head" data-go="#schedule">${ICON.calendar} היום במערכת <span class="chev">${ICON.fwd}</span></button>`;
-  if (!list.length) return `<div class="card today-card">${headRow}<p class="muted today-empty">אין שיעורים היום 🙌</p></div>`;
-  return `<div class="card list today-card">${headRow}${list.map((l) => lessonRow(l, list)).join('')}</div>`;
+  const date = upcomingDateOf(day);
+  const days = SCHOOL_DAYS.map(
+    (d) => `<button class="mini-day${d === day ? ' on' : ''}${d === today ? ' today' : ''}" data-act="home-day" data-day="${d}" aria-pressed="${d === day}" aria-label="יום ${DAY_NAMES[d]}">${DAY_LETTERS[d]}</button>`
+  ).join('');
+  const dir = S.ui.homeDayDir;
+  S.ui.homeDayDir = 0; // slide only once, right after switching
+  const slide = dir > 0 ? ' slide-next' : dir < 0 ? ' slide-prev' : '';
+  const body = list.length
+    ? `<div class="today-list${slide}">${list.map((l) => lessonRow(l, list, date)).join('')}</div>`
+    : `<p class="muted today-empty${slide}">${day === today ? 'אין שיעורים היום 🙌' : 'אין שיעורים ביום הזה'}</p>`;
+  return section(
+    dayLabel(day),
+    `<div class="card list today-card" data-swipe-days>
+      <div class="mini-days" role="group" aria-label="בחירת יום">${days}</div>
+      ${body}
+    </div>`,
+    `<button class="link-btn" data-go="#schedule">כל השבוע</button>`
+  );
 }
 
 export function schedulePage() {
@@ -86,7 +159,7 @@ export function schedulePage() {
     <h2 class="day-title">יום ${DAY_NAMES[day]}</h2>
     ${
       list.length
-        ? `<div class="card list">${list.map((l) => lessonRow(l, list)).join('')}</div>`
+        ? `<div class="card list">${list.map((l) => lessonRow(l, list, upcomingDateOf(day))).join('')}</div>`
         : empty(
             '🗓️',
             S.data.lessons.length ? 'אין שיעורים ביום הזה' : 'עוד אין מערכת שעות. אפשר להוסיף שיעורים ידנית, או לייבא אותם מוובטופ.',
@@ -247,6 +320,9 @@ export const actions = {
   'sched-day'({ day }) {
     S.ui.schedDay = +day;
     rerender();
+  },
+  'home-day'({ day }) {
+    setHomeDay(+day);
   },
   'add-lesson': () => lessonForm(),
   'edit-lesson': ({ id }) => lessonForm(S.data.lessons.find((l) => l.id === id)),

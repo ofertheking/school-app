@@ -1055,10 +1055,46 @@ mark { background: color-mix(in srgb, var(--accent) 22%, transparent); color: in
 .search-row { min-height: 58px; }
 .tile-letter { font-size: 17px; font-weight: 800; color: #fff; font-family: var(--font); }
 
-.today-card { padding: 0; }
-.today-head { padding: 14px 16px 10px; margin: 0; width: 100%; --sum: var(--teal); }
-.today-card.list > .today-head + *::before { inset-inline-start: 0; }
-.today-empty { margin: 0; padding: 0 16px 16px; }
+/* home: one day of the timetable, with a day switcher */
+.quick { margin-bottom: 4px; }
+.today-card { padding: 0; touch-action: pan-y; }
+.mini-days { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; padding: 10px 12px; }
+.mini-day {
+  height: 34px; border-radius: 10px; font-size: 15px; font-weight: 600; color: var(--text);
+  display: flex; align-items: center; justify-content: center; padding: 0;
+  background: var(--fill); position: relative;
+  transition: background-color 0.2s ease, color 0.2s ease, transform 0.15s ease;
+}
+.mini-day:active { transform: scale(0.92); }
+.mini-day.today { color: var(--accent-text); }
+.mini-day.today::after {
+  content: ""; position: absolute; bottom: 4px; left: 50%; width: 4px; height: 4px; margin-left: -2px;
+  border-radius: 50%; background: currentColor;
+}
+.mini-day.on { background: var(--accent); color: #fff; }
+.today-list > * { position: relative; }
+.today-list > * + *::before {
+  content: ""; position: absolute; top: 0; inset-inline-start: 16px; inset-inline-end: 0;
+  border-top: 0.5px solid var(--sep); pointer-events: none;
+}
+.today-empty { margin: 0; padding: 16px; text-align: center; }
+.slide-next { animation: slideFromEnd 0.32s cubic-bezier(0.22, 0.9, 0.3, 1); }
+.slide-prev { animation: slideFromStart 0.32s cubic-bezier(0.22, 0.9, 0.3, 1); }
+/* RTL: the next day sits to the left */
+@keyframes slideFromEnd { from { opacity: 0; transform: translateX(-28px); } to { opacity: 1; transform: none; } }
+@keyframes slideFromStart { from { opacity: 0; transform: translateX(28px); } to { opacity: 1; transform: none; } }
+
+/* task detail */
+.task-row .task-grade {
+  flex: none; margin-inline-end: 14px; padding: 3px 10px; border-radius: 10px;
+  background: var(--accent-tint); color: var(--accent-text); font-weight: 700; font-size: 15px;
+}
+.task-status { display: flex; align-items: center; gap: 14px; width: 100%; text-align: start; padding: 14px 16px; cursor: pointer; }
+.task-status:active { background: var(--fill); }
+.task-status .check { width: 30px; height: 30px; }
+.task-status b { font-size: 17px; }
+.task-status.on b { color: var(--good-text); }
+.countdown.done-hero { background: var(--good-tint); color: var(--good-text); }
 
 .profile-card { display: flex; align-items: center; gap: 14px; padding: 14px 16px; }
 .avatar {

@@ -55,7 +55,7 @@ function cleanupEmptyItem(r) {
 }
 
 const TAB_OF = {
-  home: 'home', exams: 'exams', exam: 'exams', tasks: 'tasks', study: 'study', library: 'library',
+  home: 'home', exams: 'exams', exam: 'exams', tasks: 'tasks', task: 'tasks', study: 'study', library: 'library',
   item: 'library', subject: 'home', more: 'more', schedule: 'home', deck: 'study', review: 'study',
   notebook: 'library', search: 'home',
 };
@@ -75,6 +75,7 @@ function render() {
       library: V.library,
       more: V.more,
       exam: () => V.examDetail(id),
+      task: () => V.taskDetail(id),
       item: () => V.itemDetail(id),
       subject: () => V.subjectDetail(id),
       schedule: Sched.schedulePage,
@@ -244,16 +245,29 @@ function taskForm(t, presetSubject, presetDue = '') {
     fields: [
       { name: 'title', label: 'מה צריך לעשות?', required: true, placeholder: 'למשל: תרגילים 1–10 עמ׳ 45' },
       { name: 'subjectId', label: 'מקצוע', type: 'subject' },
-      { name: 'due', label: 'עד מתי?', type: 'date' },
+      { name: 'due', label: 'עד מתי?', type: 'date', half: true },
+      { name: 'grade', label: 'ציון (אם כבר קיבלת)', type: 'number', inputmode: 'decimal', min: 0, max: 100, half: true, placeholder: '—' },
       { name: 'notes', label: 'הערות', type: 'textarea', rows: 3 },
+      ...(isNew ? [{ name: 'files', label: 'דף עבודה / צילומים (לא חובה)', type: 'files', accept: 'image/*,application/pdf,.doc,.docx,.ppt,.pptx' }] : []),
     ],
     footer,
-    onSubmit(v) {
+    async onSubmit(v) {
+      const files = v.files;
+      delete v.files;
+      if (v.grade == null) v.grade = '';
       if (isNew) {
-        S.data.tasks.push({ id: uid(), ...v, done: false, doneAt: null, source: 'manual', createdAt: Date.now() });
+        // A task that already has a grade was obviously handed in.
+        const done = v.grade !== '';
+        const nt = { id: uid(), ...v, done, doneAt: done ? Date.now() : null, source: 'manual', createdAt: Date.now() };
+        S.data.tasks.push(nt);
+        save();
+        if (files?.length) await Files.attachTo(`task:${nt.id}:material`, files);
         toast('המשימה נוספה');
-      } else Object.assign(t, v);
-      save();
+      } else {
+        Object.assign(t, v);
+        if (v.grade !== '' && !t.done) Object.assign(t, { done: true, doneAt: Date.now() });
+        save();
+      }
       render();
     },
   });
@@ -756,10 +770,16 @@ const ACTIONS = {
   },
   async 'del-task'({ id }) {
     if (!(await askConfirm('למחוק את המשימה?'))) return;
-    S.data.tasks = S.data.tasks.filter((t) => t.id !== id);
+    const t = task(id);
+    for (const f of [...(t?.materialFiles || []), ...(t?.workFiles || [])]) {
+      forgetFileURL(f.id);
+      await deleteFile(f.id);
+    }
+    S.data.tasks = S.data.tasks.filter((x) => x.id !== id);
     save();
     closeAllSheets();
-    render();
+    if (routeName() === `task-${id}`) navigate('#tasks');
+    else render();
   },
 
   // study timer
@@ -994,12 +1014,36 @@ function setPath(path, value) {
 
 function applyBind(el) {
   const [kind, id, field] = el.dataset.bind.split(':');
-  const obj = kind === 'exam' ? exam(id) : item(id);
+  const obj = kind === 'exam' ? exam(id) : kind === 'task' ? task(id) : item(id);
   if (!obj) return;
   obj[field] = field === 'grade' ? el.value.trim() : el.value;
   if (kind === 'item') obj.updatedAt = Date.now();
   save();
 }
+
+// Swipe the home timetable card sideways to change day (RTL: swipe right = next day).
+let swipe0 = null;
+document.addEventListener(
+  'touchstart',
+  (e) => {
+    const card = e.target.closest?.('[data-swipe-days]');
+    swipe0 = card ? { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() } : null;
+  },
+  { passive: true }
+);
+document.addEventListener(
+  'touchend',
+  (e) => {
+    if (!swipe0) return;
+    const p = e.changedTouches[0];
+    const dx = p.clientX - swipe0.x;
+    const dy = p.clientY - swipe0.y;
+    const quick = Date.now() - swipe0.t < 600;
+    swipe0 = null;
+    if (quick && Math.abs(dx) > 50 && Math.abs(dy) < 40) Sched.stepHomeDay(dx > 0 ? 1 : -1);
+  },
+  { passive: true }
+);
 
 document.addEventListener('input', (e) => {
   const el = e.target;

@@ -149,10 +149,24 @@ export function openTasks() {
     .sort((a, b) => (a.due || '9999').localeCompare(b.due || '9999'));
 }
 
+export const hasGrade = (x) => x && x.grade != null && String(x.grade).trim() !== '' && !isNaN(+x.grade);
+
+/** Every grade (exams + graded tasks), oldest first, in one shape. */
+export function gradedRecords(subjectId) {
+  const exams = S.data.exams.filter(hasGrade).map((e) => ({
+    kind: 'exam', id: e.id, subjectId: e.subjectId, title: e.title || e.type || 'מבחן', date: e.date, grade: +e.grade, href: `#exam-${e.id}`,
+  }));
+  const tasks = S.data.tasks.filter(hasGrade).map((t) => ({
+    kind: 'task', id: t.id, subjectId: t.subjectId, title: t.title || 'משימה',
+    date: t.due || isoDate(new Date(t.doneAt || t.createdAt || Date.now())), grade: +t.grade, href: `#task-${t.id}`,
+  }));
+  return [...exams, ...tasks]
+    .filter((r) => subjectId == null || r.subjectId === subjectId)
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
 export function gradeAverage(subjectId) {
-  const g = S.data.exams
-    .filter((e) => (!subjectId || e.subjectId === subjectId) && e.grade !== '' && e.grade != null && !isNaN(+e.grade))
-    .map((e) => +e.grade);
+  const g = gradedRecords(subjectId || null).map((r) => r.grade);
   if (!g.length) return null;
   return Math.round((g.reduce((a, b) => a + b, 0) / g.length) * 10) / 10;
 }

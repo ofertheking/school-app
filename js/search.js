@@ -59,7 +59,7 @@ export function searchResults(raw) {
 
   const tasks = d.tasks.filter((t) => has(q, t.title, t.notes, subjectName(t.subjectId)));
   out.push(group('משימות', tasks.slice(0, LIMIT).map((t) =>
-    row(`data-act="edit-task" data-id="${t.id}"`, 'tasks', 'orange', hl(t.title, qRaw),
+    row(`data-go="#task-${t.id}"`, 'tasks', 'orange', hl(t.title, qRaw),
       `${esc(subjectName(t.subjectId))}${t.due ? ` · ${fmtDate(t.due)}` : ''}${t.done ? ' · בוצע' : ''}`)
   ), tasks.length));
 

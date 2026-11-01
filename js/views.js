@@ -2,7 +2,7 @@
 import {
   S, subject, subjectName, subjectColor, readiness, upcomingExams, pastExams, openTasks,
   gradeAverage, todayMinutes, weekDays, weekBySubject, streak, timerElapsed, examUrgency,
-  dueLabelGroup, itemKind, exam, item, minutesBetween, COMMON_SUBJECTS, currentYear,
+  dueLabelGroup, itemKind, exam, item, task, minutesBetween, COMMON_SUBJECTS, currentYear, hasGrade,
 } from './core.js';
 import {
   esc, fmtDate, fmtDateLong, fmtHebrewDate, fmtMin, fmtClock, relDay, daysUntil, greeting,
@@ -58,14 +58,16 @@ export function examCard(e) {
 
 export function taskRow(t) {
   const late = t.due && !t.done && daysUntil(t.due) < 0;
+  const files = (t.materialFiles || []).length + (t.workFiles || []).length;
   return `<div class="task-row${t.done ? ' done' : ''}">
     <button class="check${t.done ? ' on' : ''}" data-act="task-toggle" data-id="${t.id}" aria-label="${t.done ? 'סימון כלא בוצע' : 'סימון כבוצע'}">${ICON.check}</button>
-    <button class="task-body" data-act="edit-task" data-id="${t.id}">
+    <button class="task-body" data-go="#task-${t.id}">
       <span class="task-title">${esc(t.title)}</span>
       <span class="task-meta">${dot(t.subjectId)}${esc(subjectName(t.subjectId))}${
         t.due ? ` · <span class="${late ? 'late' : ''}">${late ? '⚠︎ ' : ''}${relDay(t.due)}</span>` : ''
-      }${t.source === 'classroom' ? ' · <span class="badge">Classroom</span>' : ''}</span>
+      }${files ? ` · 📎 ${files}` : ''}${t.source === 'classroom' ? ' · <span class="badge">Classroom</span>' : ''}</span>
     </button>
+    ${hasGrade(t) ? `<span class="task-grade">${esc(t.grade)}</span>` : ''}
   </div>`;
 }
 
@@ -316,6 +318,66 @@ export function examDetail(id) {
 }
 
 // ---------- TASKS ----------
+
+export function taskDetail(id) {
+  const t = task(id);
+  if (!t) return notFound('#tasks');
+  const n = t.due ? daysUntil(t.due) : null;
+  const graded = hasGrade(t);
+  let hero = '';
+  if (t.done) {
+    if (graded) hero = `<div class="card countdown done-hero"><b class="hero-num">${esc(t.grade)}</b><span>ציון</span></div>`;
+  } else if (n != null) {
+    const cls = n <= 1 ? 'hot' : n <= 3 ? 'warm' : 'cool';
+    const big = n < 0 ? `<b class="hero-num">${-n}</b><span>${n === -1 ? 'יום באיחור' : 'ימים באיחור'}</span>`
+      : n === 0 ? `<b class="hero-num">היום</b><span>להגשה</span>`
+      : n === 1 ? `<b class="hero-num">מחר</b><span>להגשה</span>`
+      : `<b class="hero-num">${n}</b><span>ימים להגשה</span>`;
+    hero = `<div class="card countdown ${cls}">${big}</div>`;
+  }
+
+  const material = section(
+    'החומר למשימה',
+    `<div class="card">
+      <p class="muted small">דף עבודה, הוראות מהמורה, צילום מהלוח או מהספר</p>
+      ${filesGrid(`task:${t.id}:material`, t.materialFiles || [], { addLabel: 'PDF / צילום' })}
+    </div>`
+  );
+  const work = section(
+    t.done ? 'מה שהגשתי' : 'אחרי שמסיימים',
+    `<div class="card">
+      <div class="row between">
+        <label for="tgrade-${t.id}" class="muted">ציון (אם יש)</label>
+        <input id="tgrade-${t.id}" class="grade-input" type="number" inputmode="decimal" min="0" max="100" data-bind="task:${t.id}:grade" value="${esc(t.grade ?? '')}" placeholder="—">
+      </div>
+      <h3 class="card-title">${ICON.camera} העבודה שלי</h3>
+      <p class="muted small">צילומים של העבודה המוכנה או הקובץ שהגשת — נשמר כתיעוד ללמידה למבחנים</p>
+      ${filesGrid(`task:${t.id}:work`, t.workFiles || [], { addLabel: 'צילום העבודה', accept: 'image/*,application/pdf,.doc,.docx,.ppt,.pptx' })}
+    </div>`
+  );
+
+  return `
+    ${head(t.title || 'משימה', {
+      back: '#tasks',
+      actions: iconBtn('edit-task', ICON.edit, 'עריכה', `data-id="${t.id}"`),
+      sub: `${dot(t.subjectId)} ${esc(subjectName(t.subjectId))}${t.due ? ` · עד ${fmtDate(t.due)}` : ''}`,
+    })}
+    ${hero}
+    <button class="card task-status${t.done ? ' on' : ''}" data-act="task-toggle" data-id="${t.id}">
+      <span class="check${t.done ? ' on' : ''}" aria-hidden="true">${ICON.check}</span>
+      <span class="grow"><b>${t.done ? `בוצע${t.doneAt ? ` · ${fmtDate(isoDate(new Date(t.doneAt)))}` : ''}` : 'סימון כבוצע'}</b><span class="sr-sub">${t.done ? 'לחיצה מחזירה את המשימה לפתוחות' : 'אחרי זה אפשר להוסיף ציון וצילום של העבודה'}</span></span>
+    </button>
+    ${t.done ? work + material : material + work}
+    ${section(
+      'הערות',
+      `<div class="card"><textarea class="autosize plain" data-bind="task:${t.id}:notes" rows="3" placeholder="עמודים, תרגילים, מה בדיוק צריך להגיש…">${esc(t.notes || '')}</textarea></div>`
+    )}
+    <div class="actions-col">
+      ${t.link ? `<a class="btn ghost block" href="${esc(t.link)}" target="_blank" rel="noopener">${ICON.ext} פתיחה ב-Classroom</a>` : ''}
+      <button class="btn danger-ghost block" data-act="del-task" data-id="${t.id}">${ICON.trash} מחיקת המשימה</button>
+    </div>
+  `;
+}
 
 export function tasks() {
   const open = S.ui.tasksSeg === 'open';

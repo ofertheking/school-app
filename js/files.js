@@ -1,6 +1,6 @@
 // Attachments shared by summaries, notebooks and exams: storage, grid UI,
 // photo gallery and an in-app PDF viewer.
-import { S, save, item, exam } from './core.js';
+import { S, save, item, exam, task } from './core.js';
 import { esc, uid, compressImage, fmtDate, isoDate } from './util.js';
 import { putFile, getFile, deleteFile } from './store.js';
 import { openSheet, toast, askConfirm, fileURL, forgetFileURL, hydrateFiles, shareOrDownload } from './ui.js';
@@ -17,6 +17,8 @@ const isPdf = (f) => f.type === 'application/pdf' || /\.pdf$/i.test(f.name || ''
  *   "item:<id>"            summary / notebook page files
  *   "exam:<id>:material"   material for an exam
  *   "exam:<id>:paper"      photos of the exam itself
+ *   "task:<id>:material"   worksheet / instructions for a task
+ *   "task:<id>:work"       photos / files of the finished work
  */
 export function resolveRef(ref) {
   const [kind, id, slot] = String(ref).split(':');
@@ -32,6 +34,13 @@ export function resolveRef(ref) {
     const key = slot === 'paper' ? 'paperFiles' : 'materialFiles';
     e[key] = e[key] || [];
     return { owner: e, list: e[key], kind };
+  }
+  if (kind === 'task') {
+    const t = task(id);
+    if (!t) return null;
+    const key = slot === 'work' ? 'workFiles' : 'materialFiles';
+    t[key] = t[key] || [];
+    return { owner: t, list: t[key], kind };
   }
   return null;
 }
