@@ -1114,6 +1114,62 @@ mark { background: color-mix(in srgb, var(--accent) 22%, transparent); color: in
 .check-mark { color: var(--accent); display: flex; }
 .check-mark svg { width: 20px; height: 20px; }
 
+/* ---------- motion: clean entrances, presses, flip ---------- */
+@keyframes viewIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+/* Content fades/slides up on each screen change (never the sticky header). */
+.view.anim > :not(.head-bar):not(.nav-title):not(.flashcard) {
+  animation: viewIn 0.4s cubic-bezier(0.22, 0.9, 0.3, 1) backwards;
+}
+.view.anim > :nth-child(2) { animation-delay: 0.02s; }
+.view.anim > :nth-child(3) { animation-delay: 0.05s; }
+.view.anim > :nth-child(4) { animation-delay: 0.08s; }
+.view.anim > :nth-child(5) { animation-delay: 0.11s; }
+.view.anim > :nth-child(6) { animation-delay: 0.14s; }
+.view.anim > :nth-child(7) { animation-delay: 0.17s; }
+.view.anim > :nth-child(n + 8) { animation-delay: 0.2s; }
+
+/* Press feedback everywhere it reads as tappable. */
+.card.exam-card, .item-row, .lesson-row, .row-btn, .quick-btn, .nb-card, .chip-btn,
+.sum-card, .deck-list .row-btn, .cal-cell, .choice, .card-row, .search-row, .accent-dot {
+  transition: transform 0.12s ease, background-color 0.18s ease, box-shadow 0.18s ease;
+}
+.card.exam-card:active, .item-row:active, .lesson-row:active, .nb-card:active,
+.sum-card:active, .cal-cell:active, .card-row:active, .search-row:active { transform: scale(0.98); }
+.chip-btn:active, .accent-dot:active { transform: scale(0.92); }
+.tab { transition: color 0.2s ease, background-color 0.2s ease, transform 0.1s ease; }
+.seg-btn { transition: background-color 0.25s ease, box-shadow 0.25s ease; }
+.meter-fill, .hbar-fill { transition: width 0.5s cubic-bezier(0.22, 0.9, 0.3, 1); }
+
+/* Task checkbox pop. */
+@keyframes checkPop { 0% { transform: scale(0.6); } 60% { transform: scale(1.15); } 100% { transform: scale(1); } }
+.check.on { animation: checkPop 0.28s ease; }
+.check { transition: background-color 0.2s ease, border-color 0.2s ease; }
+
+/* Flashcard flip: the review card swings in on every flip / next card. */
+@keyframes flipIn {
+  from { transform: perspective(900px) rotateY(-78deg); opacity: 0; }
+  60% { opacity: 1; }
+  to { transform: perspective(900px) rotateY(0); opacity: 1; }
+}
+.flashcard { animation: flipIn 0.34s cubic-bezier(0.3, 0.8, 0.35, 1); transform-origin: center; backface-visibility: hidden; }
+.flashcard:active { transform: scale(0.98); }
+
+/* Countdown & hero numbers gently scale in. */
+@keyframes popIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+.countdown .hero-num, .hero-grade, .ring { animation: popIn 0.45s cubic-bezier(0.22, 0.9, 0.3, 1) backwards; animation-delay: 0.08s; }
+
+/* Toast bounce-in. */
+@keyframes toastIn { from { opacity: 0; transform: translate(-50%, 24px) scale(0.95); } to { opacity: 1; transform: translate(-50%, 0) scale(1); } }
+#toast.show { animation: toastIn 0.3s cubic-bezier(0.22, 1.2, 0.4, 1); }
+
+/* Sheet content fades up a touch after the sheet slides in. */
+@keyframes sheetContentIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.sheet-wrap.open .sheet > :not(.sheet-grabber) { animation: sheetContentIn 0.32s ease 0.06s backwards; }
+
+/* Spinner already spins; give the day chips a snappy selected transition. */
+.day-chip { transition: background-color 0.2s ease, transform 0.1s ease; }
+.day-chip:active { transform: scale(0.94); }
+
 /* ---------- phone in landscape: compact chrome so content has room ---------- */
 @media (orientation: landscape) and (max-height: 500px) {
   :root { --tabbar-h: 40px; }

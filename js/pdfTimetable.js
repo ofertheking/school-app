@@ -10,9 +10,35 @@ const DAY_WORDS = [
   [4, /^(יום\s*)?(חמישי|ה['׳]?)$/],
   [5, /^(יום\s*)?(שישי|ו['׳]?)$/],
 ];
-const DICT = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'מתמטיקה', 'אנגלית', 'היסטוריה', 'ספרות', 'לשון', 'אזרחות',
-  'ביולוגיה', 'כימיה', 'פיזיקה', 'חינוך', 'ספורט', 'מערכת', 'שעות', 'שיעור', 'כיתה', 'ערבית', 'מדעים', 'גאוגרפיה', 'תנך', 'תנ"ך'];
+// Common Israeli school subjects, used to tell the subject apart from the teacher's name.
+const SUBJECTS = [
+  'מתמטיקה', 'מתמט', 'אנגלית', 'היסטוריה', 'ספרות', 'לשון', 'הבעה', 'אזרחות', 'ביולוגיה', 'כימיה', 'פיזיקה',
+  'חינוך', 'גופני', 'ספורט', 'ערבית', 'מדעים', 'מדע', 'גאוגרפיה', 'גיאוגרפיה', 'תנך', 'תנ', 'מולדת', 'מחשבים',
+  'מחשב', 'תקשורת', 'פיזי', 'כימי', 'ביו', 'אמנות', 'אומנות', 'מוזיקה', 'מוסיקה', 'תיאטרון', 'קולנוע', 'צרפתית',
+  'ספרדית', 'רוסית', 'יהדות', 'תלמוד', 'משנה', 'גמרא', 'מקרא', 'הלכה', 'פילוסופיה', 'פסיכולוגיה', 'סוציולוגיה',
+  'כלכלה', 'חשבונאות', 'ניהול', 'משפט', 'רובוטיקה', 'אלקטרוניקה', 'הנדסה', 'ביולוגית', 'גיאולוגיה', 'סטטיסטיקה',
+  'חנך', 'חברה', 'של', 'מגמה', 'מעבדה', 'כישורי', 'מצוינות', 'העשרה', 'חטיבה', 'פרויקט', 'עבודת',
+];
+const DICT = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'מערכת', 'שעות', 'שיעור', 'כיתה', ...SUBJECTS];
 const HEB = /[֐-׿]/;
+const TEACHER_TITLE = /^(מר|גב|גברת|ד"?ר|הרב|המורה|מורה|מר'|פרופ)\b/;
+
+/** How strongly a line reads as a subject (not a teacher's name / room). */
+function subjectScore(line) {
+  const t = line.replace(/["'׳״]/g, '');
+  let score = 0;
+  for (const w of SUBJECTS) if (t.includes(w)) score += w.length >= 4 ? 3 : 1;
+  const words = line.split(/\s+/).filter(Boolean);
+  if (words.length === 1) score += 1; // subjects are usually one word; names are usually two
+  return score;
+}
+
+/** Does the line look like a person's name rather than a subject? */
+function looksLikeName(line) {
+  if (TEACHER_TITLE.test(line)) return true;
+  const words = line.split(/\s+/).filter((w) => HEB.test(w));
+  return words.length >= 2 && subjectScore(line) === 0;
+}
 const TIME = /(\d{1,2})[:.](\d{2})/g;
 
 const MIRROR = { '(': ')', ')': '(', '[': ']', ']': '[', '<': '>', '>': '<' };
@@ -168,13 +194,26 @@ export function parseTimetableItems(rawItems) {
     );
     const lineList = lines.filter(Boolean);
     if (!lineList.length) continue;
+    // Classify the cell's lines: room → subject (best dictionary match) → teacher (a name).
+    let room = '';
+    const rest = [];
+    for (const line of lineList) {
+      if (!room && (/(חדר|כיתה|מעבדה|אולם|מקלט|קומה)/.test(line) || /^\d{1,4}[א-ת]?$/.test(line))) room = line;
+      else rest.push(line);
+    }
     let subject = '';
     let teacher = '';
-    let room = '';
-    for (const line of lineList) {
-      if (!room && (/חדר|כיתה|מעבדה|אולם|מקלט/.test(line) || /^\d{1,4}[א-ת]?$/.test(line))) room = line;
-      else if (!subject) subject = line;
-      else if (!teacher) teacher = line;
+    if (rest.length) {
+      // The line that reads most like a subject wins; prefer a non-name on ties.
+      let best = rest[0];
+      let bestScore = -1;
+      for (const line of rest) {
+        const sc = subjectScore(line) - (looksLikeName(line) ? 2 : 0);
+        if (sc > bestScore) { bestScore = sc; best = line; }
+      }
+      subject = best;
+      const others = rest.filter((l) => l !== best);
+      teacher = others.find(looksLikeName) || others[0] || '';
     }
     const cleanName = cleanSubject(subject.replace(TIME, ''));
     if (!cleanName || cleanName.replace(/[^\p{L}]/gu, '').length < 2) continue;

@@ -94,8 +94,18 @@ function render() {
   view.querySelectorAll('textarea.autosize').forEach(autosize);
   hydrateFiles(view);
   watchLargeTitle();
+  // Play the staggered entrance animation on a screen change — not on in-place
+  // re-renders (toggling a task, cycling a topic, …), which keep the same route.
   if (r !== currentRoute) {
+    view.classList.remove('anim');
+    void view.offsetWidth; // restart the CSS animation
+    view.classList.add('anim');
+    clearTimeout(render._animT);
+    // Drop the class once the entrance finishes, so later in-place re-renders
+    // (e.g. flipping a flashcard) don't replay it on freshly created elements.
+    render._animT = setTimeout(() => view.classList.remove('anim'), 650);
     window.scrollTo(0, 0);
+    document.body.classList.remove('nav-compact');
     currentRoute = r;
   }
 }
