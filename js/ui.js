@@ -45,9 +45,18 @@ export function closeAllSheets() {
   [...openClosers].forEach((close) => close());
 }
 
-export function toast(msg, ms = 2600) {
+/** action: { label, go } adds a tappable button to the toast. */
+export function toast(msg, ms = 2600, action = null) {
   const el = document.getElementById('toast');
   el.textContent = msg;
+  el.classList.toggle('has-act', !!action);
+  if (action) {
+    const b = document.createElement('button');
+    b.className = 'toast-act';
+    b.textContent = action.label;
+    b.dataset.go = action.go;
+    el.append(' ', b);
+  }
   el.classList.add('show');
   clearTimeout(el._t);
   el._t = setTimeout(() => el.classList.remove('show'), ms);

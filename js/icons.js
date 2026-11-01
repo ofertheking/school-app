@@ -36,5 +36,9 @@ export const ICON = {
   target: svg('<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1" fill="currentColor"/>'),
   cloud: svg('<path d="M7 18h10.5a4.5 4.5 0 0 0 .4-9A6 6 0 0 0 6.2 10.3 4 4 0 0 0 7 18z"/>'),
   grad: svg('<path d="m2 9 10-5 10 5-10 5z"/><path d="M6 11v5c0 1.5 2.7 3 6 3s6-1.5 6-3v-5M22 9v6"/>'),
+  video: svg('<rect x="2.5" y="6" width="13" height="12" rx="2.5"/><path d="m15.5 10.5 6-3.5v10l-6-3.5z"/>'),
+  photos: svg('<rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.8"/><path d="m21 15-5-5L5 21"/>'),
+  doc: svg('<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/>'),
+  music: svg('<path d="M9 18V5l11-2v13"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/>'),
   flame: svg('<path d="M12 21c-3.9 0-7-2.8-7-6.6 0-2.9 1.9-4.9 3.6-6.8.4 1.6 1.2 2.7 2.4 3.4-.3-3.1 1-5.8 3.5-8 .2 2.8 1.4 4.7 3 6.5 1.4 1.5 2.5 3.1 2.5 5.1 0 3.6-3.1 6.4-8 6.4z"/>'),
 };

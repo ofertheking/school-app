@@ -249,20 +249,28 @@ function taskForm(t, presetSubject, presetDue = '') {
       { name: 'due', label: 'עד מתי?', type: 'date', half: true },
       { name: 'grade', label: 'ציון (אם כבר קיבלת)', type: 'number', inputmode: 'decimal', min: 0, max: 100, half: true, placeholder: '—' },
       { name: 'notes', label: 'הערות', type: 'textarea', rows: 3 },
-      ...(isNew ? [{ name: 'files', label: 'דף עבודה / צילומים (לא חובה)', type: 'files', accept: 'image/*,application/pdf,.doc,.docx,.ppt,.pptx' }] : []),
+      ...(isNew
+        ? [
+            { name: 'files', label: 'דף עבודה / חומר מהמורה (לא חובה)', type: 'files', accept: Files.ACCEPT_ALL },
+            { name: 'work', label: 'העבודה שהגשתי — תמונות, סרטונים, PDF… (לא חובה)', type: 'files', accept: '' },
+          ]
+        : []),
     ],
     footer,
     async onSubmit(v) {
       const files = v.files;
+      const work = v.work;
       delete v.files;
+      delete v.work;
       if (v.grade == null) v.grade = '';
       if (isNew) {
-        // A task that already has a grade was obviously handed in.
-        const done = v.grade !== '';
+        // A task that already has a grade or handed-in work was obviously handed in.
+        const done = v.grade !== '' || !!work?.length;
         const nt = { id: uid(), ...v, done, doneAt: done ? Date.now() : null, source: 'manual', createdAt: Date.now() };
         S.data.tasks.push(nt);
         save();
         if (files?.length) await Files.attachTo(`task:${nt.id}:material`, files);
+        if (work?.length) await Files.attachTo(`task:${nt.id}:work`, work);
         toast('המשימה נוספה');
       } else {
         Object.assign(t, v);
@@ -559,15 +567,16 @@ async function runClassroomSync(token) {
 // ---------------------------------------------------------------- backup
 
 /** Every file id referenced by a year's content (items, exams). */
-function fileIdsIn(content) {
-  const ids = [];
-  for (const it of content.items || []) for (const f of it.files || []) ids.push(f.id);
-  for (const e of content.exams || []) for (const f of [...(e.materialFiles || []), ...(e.paperFiles || [])]) ids.push(f.id);
-  return ids;
+/** Attachment metadata from summaries, exams and tasks. */
+function fileMetasIn(content) {
+  const out = [];
+  for (const it of content.items || []) out.push(...(it.files || []));
+  for (const e of content.exams || []) out.push(...(e.materialFiles || []), ...(e.paperFiles || []));
+  for (const t of content.tasks || []) out.push(...(t.materialFiles || []), ...(t.workFiles || []));
+  return out.filter((f) => f?.id);
 }
 
 async function exportBackup() {
-  toast('מכין גיבוי…', 2000);
   await archiveCurrentYear(); // make sure the active year's archive is current
   const years = {};
   for (const y of S.data.years) {
@@ -578,8 +587,27 @@ async function exportBackup() {
   const data = JSON.parse(JSON.stringify(S.data));
   if (data.settings?.webtop) data.settings.webtop.pass = '';
   // collect files across the active year + all archived years
+  const metas = [...fileMetasIn(data), ...Object.values(years).flatMap(fileMetasIn)];
+  const videos = metas.filter(Files.isVideo);
+  let skipVideos = false;
+  if (videos.length) {
+    const mb = (n) => `${Math.max(1, Math.round(n / 1048576))}MB`;
+    const all = metas.reduce((a, f) => a + (f.size || 0), 0);
+    const vid = videos.reduce((a, f) => a + (f.size || 0), 0);
+    const pick = await choiceSheet('לכלול את הסרטונים בגיבוי?', [
+      { value: 'no', label: 'בלי הסרטונים', desc: `קובץ קטן ומהיר · בערך ${mb((all - vid) * 1.35)}`, icon: ICON.share },
+      { value: 'yes', label: 'עם הסרטונים', desc: `בערך ${mb(all * 1.35)} — קובץ גדול, ייקח זמן`, icon: ICON.video },
+    ]);
+    if (!pick) return;
+    skipVideos = pick === 'no';
+  }
+  toast('מכין גיבוי…', 2500);
   const files = {};
-  const ids = new Set([...fileIdsIn(data), ...Object.values(years).flatMap(fileIdsIn)]);
+  const ids = new Set();
+  for (const f of metas) {
+    if (!(skipVideos && Files.isVideo(f))) ids.add(f.id);
+    if (f.thumb) ids.add(f.thumb);
+  }
   for (const id of ids) {
     const b = await getFile(id);
     if (b) files[id] = await blobToDataURL(b);
@@ -718,8 +746,10 @@ const ACTIONS = {
     if (!(await askConfirm('למחוק את המבחן?'))) return;
     const ex = exam(id);
     for (const f of [...(ex?.materialFiles || []), ...(ex?.paperFiles || [])]) {
-      forgetFileURL(f.id);
-      await deleteFile(f.id);
+      for (const fid of [f.id, f.thumb].filter(Boolean)) {
+        forgetFileURL(fid);
+        await deleteFile(fid);
+      }
     }
     S.data.exams = S.data.exams.filter((e) => e.id !== id);
     S.data.sessions.forEach((s) => s.examId === id && (s.examId = ''));
@@ -770,14 +800,19 @@ const ACTIONS = {
     t.doneAt = t.done ? Date.now() : null;
     save();
     render();
-    if (t.done) toast('כל הכבוד! ✔︎');
+    if (!t.done) return;
+    // From a list: offer a shortcut to add the handed-in work.
+    if (routeName() !== `task-${id}` && !(t.workFiles || []).length) toast('כל הכבוד! ✔︎', 5000, { label: 'הוספת ההגשה', go: `#task-${id}` });
+    else toast('כל הכבוד! ✔︎');
   },
   async 'del-task'({ id }) {
     if (!(await askConfirm('למחוק את המשימה?'))) return;
     const t = task(id);
     for (const f of [...(t?.materialFiles || []), ...(t?.workFiles || [])]) {
-      forgetFileURL(f.id);
-      await deleteFile(f.id);
+      for (const fid of [f.id, f.thumb].filter(Boolean)) {
+        forgetFileURL(fid);
+        await deleteFile(fid);
+      }
     }
     S.data.tasks = S.data.tasks.filter((x) => x.id !== id);
     save();
@@ -875,8 +910,10 @@ const ACTIONS = {
     if (!(await askConfirm('למחוק את החומר הזה?', { detail: 'כולל כל הקבצים והתמונות שבו.' }))) return;
     const it = item(id);
     for (const f of it.files || []) {
-      forgetFileURL(f.id);
-      await deleteFile(f.id);
+      for (const fid of [f.id, f.thumb].filter(Boolean)) {
+        forgetFileURL(fid);
+        await deleteFile(fid);
+      }
     }
     S.data.items = S.data.items.filter((x) => x.id !== id);
     save();

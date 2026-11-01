@@ -203,12 +203,16 @@ export function localCopies() {
   return out;
 }
 
-export async function putFile(id, blob) {
+/** strict: throw if it can't be stored for real (e.g. out of space) instead of keeping it in memory. */
+export async function putFile(id, blob, { strict = false } = {}) {
   if (mode === 'idb') {
     try {
-      await run('files', 'readwrite', (s) => s.put(blob, id));
+      await run('files', 'readwrite', (s) => s.put(blob, id), strict ? 2 : 4);
       return;
-    } catch { /* fall through to memory */ }
+    } catch (e) {
+      if (strict) throw e;
+      /* fall through to memory */
+    }
   }
   memFiles.set(id, blob);
 }

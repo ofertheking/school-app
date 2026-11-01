@@ -8,9 +8,23 @@ import { ICON } from './icons.js';
 import { rerender } from './router.js';
 import { renderPdf } from './pdf.js';
 
-export const ACCEPT_ALL = 'image/*,application/pdf,.doc,.docx,.ppt,.pptx,.txt';
-const isImg = (f) => f.type?.startsWith('image/');
-const isPdf = (f) => f.type === 'application/pdf' || /\.pdf$/i.test(f.name || '');
+export const ACCEPT_ALL = 'image/*,video/*,audio/*,application/pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.pages,.key,.numbers';
+const ext = (f) => (String(f?.name || '').match(/\.([a-z0-9]+)$/i)?.[1] || '').toLowerCase();
+export const isImg = (f) => !!f?.type?.startsWith('image/');
+export const isPdf = (f) => f?.type === 'application/pdf' || ext(f) === 'pdf';
+export const isVideo = (f) => !!f?.type?.startsWith('video/') || /^(mp4|mov|m4v|webm|3gp)$/.test(ext(f));
+export const isAudio = (f) => !!f?.type?.startsWith('audio/') || /^(m4a|mp3|wav|aac|caf|ogg|opus)$/.test(ext(f));
+const isMedia = (f) => isImg(f) || isVideo(f);
+const fmtDur = (sec) => `${Math.floor(sec / 60)}:${String(Math.round(sec % 60)).padStart(2, '0')}`;
+
+/** "3 תמונות · סרטון אחד · 2 קבצים" */
+export function filesSummary(list = []) {
+  const img = list.filter(isImg).length;
+  const vid = list.filter(isVideo).length;
+  const other = list.length - img - vid;
+  const part = (n, one, many) => (n === 1 ? one : n ? `${n} ${many}` : '');
+  return [part(img, 'תמונה אחת', 'תמונות'), part(vid, 'סרטון אחד', 'סרטונים'), part(other, 'קובץ אחד', 'קבצים')].filter(Boolean).join(' · ');
+}
 
 /**
  * Where a list of attachments lives:
@@ -45,14 +59,87 @@ export function resolveRef(ref) {
   return null;
 }
 
+/** A small JPEG of a frame from the video (+ its length), for the grid. Never throws. */
+function videoThumb(blob) {
+  return new Promise((resolve) => {
+    let done = false;
+    const url = URL.createObjectURL(blob);
+    const v = document.createElement('video');
+    const finish = (res) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      URL.revokeObjectURL(url);
+      resolve(res);
+    };
+    const timer = setTimeout(() => finish(null), 8000);
+    v.muted = true;
+    v.playsInline = true;
+    v.setAttribute('playsinline', '');
+    v.preload = 'auto';
+    v.onloadedmetadata = () => {
+      try {
+        v.currentTime = Math.min(0.5, (v.duration || 1) / 3);
+      } catch {
+        finish({ duration: v.duration });
+      }
+    };
+    v.onseeked = () => {
+      try {
+        const sc = Math.min(1, 480 / Math.max(v.videoWidth, v.videoHeight, 1));
+        const c = document.createElement('canvas');
+        c.width = Math.max(1, Math.round(v.videoWidth * sc));
+        c.height = Math.max(1, Math.round(v.videoHeight * sc));
+        c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+        c.toBlob((b) => finish({ blob: v.videoWidth ? b : null, duration: v.duration }), 'image/jpeg', 0.75);
+      } catch {
+        finish({ duration: v.duration });
+      }
+    };
+    v.onerror = () => finish(null);
+    v.src = url;
+  });
+}
+
+const mb = (n) => `${Math.max(1, Math.round(n / 1048576))}MB`;
+
 /** Save files to IndexedDB (photos are shrunk first) and return their metadata. */
 export async function storeFiles(fileList) {
   const metas = [];
+  let free = Infinity;
+  try {
+    const est = await navigator.storage?.estimate?.();
+    if (est?.quota) free = est.quota - (est.usage || 0);
+  } catch { /* unknown */ }
   for (const f of fileList) {
-    const blob = await compressImage(f);
+    const video = isVideo(f);
+    if (f.size > free) {
+      toast(`אין מספיק מקום במכשיר בשביל ${f.name || 'הקובץ'} (${mb(f.size)})`, 5000);
+      continue;
+    }
+    if (video || f.size > 15 * 1048576) toast(`שומר ${video ? 'סרטון' : 'קובץ'} (${mb(f.size)})…`, 4000);
+    const blob = video ? f : await compressImage(f);
     const id = uid();
-    await putFile(id, blob);
-    metas.push({ id, name: f.name || 'קובץ', type: blob.type || f.type || '', size: blob.size, addedAt: Date.now() });
+    try {
+      await putFile(id, blob, { strict: true });
+    } catch {
+      toast(`לא הצלחתי לשמור את ${f.name || 'הקובץ'} — אולי אין מספיק מקום`, 5000);
+      continue;
+    }
+    free -= blob.size;
+    const meta = { id, name: f.name || (video ? 'סרטון' : 'קובץ'), type: blob.type || f.type || '', size: blob.size, addedAt: Date.now() };
+    if (video) {
+      const t = await videoThumb(f);
+      if (t?.duration && isFinite(t.duration)) meta.duration = Math.round(t.duration);
+      if (t?.blob) {
+        const tid = uid();
+        try {
+          await putFile(tid, t.blob, { strict: true });
+          meta.thumb = tid;
+        } catch { /* no thumbnail, still fine */ }
+      }
+    }
+    metas.push(meta);
   }
   return metas;
 }
@@ -72,9 +159,14 @@ export async function removeFile(ref, fid) {
   const r = resolveRef(ref);
   if (!r) return;
   const i = r.list.findIndex((f) => f.id === fid);
+  const meta = i !== -1 ? r.list[i] : null;
   if (i !== -1) r.list.splice(i, 1);
   forgetFileURL(fid);
   await deleteFile(fid);
+  if (meta?.thumb) {
+    forgetFileURL(meta.thumb);
+    await deleteFile(meta.thumb);
+  }
   // A notebook page batch with no photos and no text left is removed entirely.
   if (r.kind === 'item' && r.owner.notebook && !r.list.length && !r.owner.body?.trim()) {
     S.data.items = S.data.items.filter((x) => x !== r.owner);
@@ -82,36 +174,71 @@ export async function removeFile(ref, fid) {
   save();
 }
 
-export function filesGrid(ref, files = [], { addLabel = 'צילום / קובץ', accept = ACCEPT_ALL } = {}) {
+function badge(f) {
+  const e = ext(f);
+  if (isPdf(f)) return '<b class="pdf-badge">PDF</b>';
+  if (isAudio(f)) return `<span class="ext-ico">${ICON.music}</span>`;
+  if (/^(doc|docx|pages|rtf|odt)$/.test(e)) return '<b class="ext-badge b-doc">DOC</b>';
+  if (/^(ppt|pptx|key|odp)$/.test(e)) return '<b class="ext-badge b-ppt">PPT</b>';
+  if (/^(xls|xlsx|numbers|csv|ods)$/.test(e)) return '<b class="ext-badge b-xls">XLS</b>';
+  if (/^(zip|rar|7z)$/.test(e)) return '<b class="ext-badge b-zip">ZIP</b>';
+  return `<span class="ext-ico">${ICON.doc}</span>`;
+}
+
+function tileHTML(ref, f) {
+  const del = `<button class="file-del" data-act="file-del" data-ref="${ref}" data-fid="${f.id}" aria-label="מחיקה">${ICON.x}</button>`;
+  if (isImg(f)) {
+    return `<div class="file-tile"><button class="file-img" data-act="file-open" data-ref="${ref}" data-fid="${f.id}" aria-label="הגדלה"><img alt="${esc(f.name)}" data-file-src="${f.id}"></button>${del}</div>`;
+  }
+  if (isVideo(f)) {
+    return `<div class="file-tile"><button class="file-img file-video" data-act="file-open" data-ref="${ref}" data-fid="${f.id}" aria-label="ניגון ${esc(f.name)}">
+        ${f.thumb ? `<img alt="" data-file-src="${f.thumb}">` : ''}<span class="play-badge">${ICON.play}</span>
+        ${f.duration ? `<span class="dur-badge ltr">${fmtDur(f.duration)}</span>` : ''}</button>${del}</div>`;
+  }
+  return `<div class="file-tile doc"><button class="file-doc" data-act="file-open" data-ref="${ref}" data-fid="${f.id}">${badge(f)}<span>${esc(f.name)}</span></button>${del}</div>`;
+}
+
+export function filesGrid(ref, files = [], { addLabel = 'צילום / קובץ', accept = ACCEPT_ALL, add = true } = {}) {
+  if (!add && !files.length) return '';
   return `<div class="files-grid">
-    ${files
-      .map((f) =>
-        isImg(f)
-          ? `<div class="file-tile"><button class="file-img" data-act="file-open" data-ref="${ref}" data-fid="${f.id}" aria-label="הגדלה"><img alt="${esc(f.name)}" data-file-src="${f.id}"></button>
-             <button class="file-del" data-act="file-del" data-ref="${ref}" data-fid="${f.id}" aria-label="מחיקה">${ICON.x}</button></div>`
-          : `<div class="file-tile doc"><button class="file-doc" data-act="file-open" data-ref="${ref}" data-fid="${f.id}">${isPdf(f) ? '<b class="pdf-badge">PDF</b>' : ICON.clip}<span>${esc(f.name)}</span></button>
-             <button class="file-del" data-act="file-del" data-ref="${ref}" data-fid="${f.id}" aria-label="מחיקה">${ICON.x}</button></div>`
-      )
-      .join('')}
-    <label class="file-tile add">
-      <input type="file" accept="${accept}" multiple data-attach-ref="${ref}" hidden>
+    ${files.map((f) => tileHTML(ref, f)).join('')}
+    ${
+      add
+        ? `<label class="file-tile add">
+      <input type="file"${accept ? ` accept="${accept}"` : ''} multiple data-attach-ref="${ref}" hidden>
       ${ICON.camera}<span>${esc(addLabel)}</span>
-    </label>
+    </label>`
+        : ''
+    }
+  </div>`;
+}
+
+/** Four big add buttons: camera photo, camera video, photo library, any file. */
+export function attachBar(ref) {
+  const btn = (icon, label, attrs) =>
+    `<label class="attach-btn">${icon}<span>${label}</span><input type="file" ${attrs} data-attach-ref="${ref}" hidden></label>`;
+  return `<div class="attach-bar">
+    ${btn(ICON.camera, 'צילום', 'accept="image/*" capture="environment"')}
+    ${btn(ICON.video, 'סרטון', 'accept="video/*" capture="environment"')}
+    ${btn(ICON.photos, 'גלריה', 'accept="image/*,video/*" multiple')}
+    ${btn(ICON.doc, 'קבצים', 'multiple')}
   </div>`;
 }
 
 // ---------------------------------------------------------------- viewers
 
 /**
- * Full-screen photo gallery. entries: [{ ref, fid, caption }]. Swipe or use the arrows.
+ * Full-screen gallery for photos and videos. entries: [{ ref, fid, caption, video, name, type }].
+ * Swipe or use the arrows.
  */
+let sheetVid = null;
 export function openGallery(entries, start = 0) {
   if (!entries.length) return;
   let i = Math.max(0, Math.min(start, entries.length - 1));
   openSheet(
     `<div class="gallery">
       <div class="gallery-top"><span class="g-count small muted ltr"></span><span class="g-caption small"></span></div>
-      <div class="gallery-stage"><img class="g-img" alt=""></div>
+      <div class="gallery-stage"><img class="g-img" alt=""><video class="g-video" controls playsinline preload="metadata" hidden></video><p class="g-missing" hidden>הקובץ לא נמצא במכשיר</p></div>
       <div class="gallery-nav">
         <button class="icon-btn" data-g="prev" aria-label="הקודם">${ICON.back}</button>
         <button class="btn ghost sm" data-g="share">${ICON.share} שיתוף</button>
@@ -122,13 +249,29 @@ export function openGallery(entries, start = 0) {
     <button class="btn ghost block" data-close>סגירה</button>`,
     {
       tall: true,
+      onClose: () => sheetVid?.pause(),
       onMount(sheet, close) {
+        sheetVid = sheet.querySelector('.g-video');
         const img = sheet.querySelector('.g-img');
+        const vid = sheet.querySelector('.g-video');
+        const missing = sheet.querySelector('.g-missing');
         const show = async () => {
           const e = entries[i];
           sheet.querySelector('.g-count').textContent = `${i + 1} / ${entries.length}`;
           sheet.querySelector('.g-caption').textContent = e.caption || '';
-          img.src = (await fileURL(e.fid)) || '';
+          vid.pause();
+          const u = (await fileURL(e.fid)) || '';
+          missing.hidden = !!u;
+          img.hidden = !!e.video || !u;
+          vid.hidden = !e.video || !u;
+          if (e.video) {
+            img.removeAttribute('src');
+            if (u && vid.getAttribute('src') !== u) vid.src = u;
+          } else {
+            vid.removeAttribute('src');
+            vid.load();
+            img.src = u;
+          }
           sheet.querySelector('[data-g=prev]').disabled = i === 0;
           sheet.querySelector('[data-g=next]').disabled = i === entries.length - 1;
         };
@@ -141,11 +284,13 @@ export function openGallery(entries, start = 0) {
         sheet.querySelector('[data-g=prev]').addEventListener('click', () => go(-1));
         sheet.querySelector('[data-g=next]').addEventListener('click', () => go(1));
         sheet.querySelector('[data-g=share]').addEventListener('click', async () => {
-          const blob = await getFile(entries[i].fid);
-          if (blob) shareOrDownload(new File([blob], `page-${i + 1}.jpg`, { type: blob.type || 'image/jpeg' }));
+          const e = entries[i];
+          const blob = await getFile(e.fid);
+          if (blob) shareOrDownload(new File([blob], e.name || `page-${i + 1}.jpg`, { type: blob.type || e.type || 'image/jpeg' }));
         });
         sheet.querySelector('[data-g=del]').addEventListener('click', async () => {
-          if (!(await askConfirm('למחוק את התמונה?'))) return;
+          if (!(await askConfirm(entries[i].video ? 'למחוק את הסרטון?' : 'למחוק את התמונה?'))) return;
+          vid.pause();
           await removeFile(entries[i].ref, entries[i].fid);
           entries.splice(i, 1);
           rerender();
@@ -194,15 +339,43 @@ export async function openPdfViewer(fid, name = 'PDF') {
   );
 }
 
+let audioEl = null;
+async function openAudio(fid, name) {
+  const u = await fileURL(fid);
+  if (!u) return toast('הקובץ לא נמצא');
+  openSheet(
+    `<div class="sheet-head"><button type="button" class="link-btn" data-close>סגירה</button><h3 class="ellipsis">${esc(name)}</h3>
+       <button type="button" class="link-btn" data-share>שיתוף</button></div>
+     <div class="audio-box"><span class="audio-ico">${ICON.music}</span><audio controls src="${u}"></audio></div>`,
+    {
+      onMount(sheet) {
+        audioEl = sheet.querySelector('audio');
+        sheet.querySelector('[data-share]').addEventListener('click', async () => {
+          const blob = await getFile(fid);
+          if (blob) shareOrDownload(new File([blob], name, { type: blob.type }));
+        });
+      },
+      onClose: () => audioEl?.pause(),
+    }
+  );
+}
+
 export async function openFile(ref, fid) {
   const r = resolveRef(ref);
   const f = r?.list.find((x) => x.id === fid);
   if (!f) return toast('הקובץ לא נמצא');
-  if (isImg(f)) {
-    const imgs = r.list.filter(isImg);
-    return openGallery(imgs.map((x) => ({ ref, fid: x.id, caption: x.addedAt ? fmtDate(isoDate(new Date(x.addedAt))) : '' })), imgs.indexOf(f));
+  if (isMedia(f)) {
+    const media = r.list.filter(isMedia);
+    return openGallery(
+      media.map((x) => ({
+        ref, fid: x.id, video: isVideo(x), name: x.name, type: x.type,
+        caption: x.addedAt ? fmtDate(isoDate(new Date(x.addedAt))) : '',
+      })),
+      media.indexOf(f)
+    );
   }
   if (isPdf(f)) return openPdfViewer(fid, f.name);
+  if (isAudio(f)) return openAudio(fid, f.name);
   const blob = await getFile(fid);
   if (blob) shareOrDownload(new File([blob], f.name, { type: f.type || blob.type }));
 }
@@ -222,7 +395,8 @@ export async function onAttachInput(el) {
   const files = [...el.files];
   el.value = '';
   if (!files.length) return false;
-  await attachTo(ref, files);
+  const added = await attachTo(ref, files);
+  if (added.length) toast(added.length === 1 ? 'נוסף ✔︎' : `נוספו ${added.length} קבצים ✔︎`);
   const r = resolveRef(ref);
   if (r?.kind === 'item' && !r.owner.title) {
     const f = files[0];

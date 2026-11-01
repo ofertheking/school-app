@@ -19,7 +19,7 @@ import { ACCENTS, appearance } from './appearance.js';
 import { todaySection } from './schedule.js';
 import { webtopRows } from './webtop.js';
 import { decksList } from './flashcards.js';
-import { filesGrid } from './files.js';
+import { filesGrid, attachBar, filesSummary } from './files.js';
 import { notebooksGrid } from './notebooks.js';
 import { recoverCard } from './recover.js';
 
@@ -60,6 +60,9 @@ export function examCard(e) {
 export function taskRow(t) {
   const late = t.due && !t.done && daysUntil(t.due) < 0;
   const files = (t.materialFiles || []).length + (t.workFiles || []).length;
+  const quickAttach = t.done && !(t.workFiles || []).length
+    ? `<label class="row-attach" aria-label="הוספת העבודה שהגשתי">${ICON.clip}<input type="file" multiple data-attach-ref="task:${t.id}:work" hidden></label>`
+    : '';
   return `<div class="task-row${t.done ? ' done' : ''}">
     <button class="check${t.done ? ' on' : ''}" data-act="task-toggle" data-id="${t.id}" aria-label="${t.done ? 'סימון כלא בוצע' : 'סימון כבוצע'}">${ICON.check}</button>
     <button class="task-body" data-go="#task-${t.id}">
@@ -68,7 +71,7 @@ export function taskRow(t) {
         t.due ? ` · <span class="${late ? 'late' : ''}">${late ? '⚠︎ ' : ''}${relDay(t.due)}</span>` : ''
       }${files ? ` · 📎 ${files}` : ''}${t.source === 'classroom' ? ' · <span class="badge">Classroom</span>' : ''}</span>
     </button>
-    ${hasGrade(t) ? `<span class="task-grade">${esc(t.grade)}</span>` : ''}
+    ${quickAttach}${hasGrade(t) ? `<span class="task-grade">${esc(t.grade)}</span>` : ''}
   </div>`;
 }
 
@@ -356,16 +359,22 @@ export function taskDetail(id) {
       ${filesGrid(`task:${t.id}:material`, t.materialFiles || [], { addLabel: 'PDF / צילום' })}
     </div>`
   );
+  const workFiles = t.workFiles || [];
   const work = section(
-    t.done ? 'מה שהגשתי' : 'אחרי שמסיימים',
+    'ההגשה שלי',
     `<div class="card">
-      <div class="row between">
+      <h3 class="card-title">${ICON.clip} העבודה שהגשתי</h3>
+      <p class="muted small">${
+        workFiles.length
+          ? filesSummary(workFiles)
+          : 'כמה שרוצים: תמונות, סרטונים, PDF, מצגות, Word ועוד — נשמר כתיעוד וללמידה למבחנים'
+      }</p>
+      ${attachBar(`task:${t.id}:work`)}
+      ${filesGrid(`task:${t.id}:work`, workFiles, { add: false })}
+      <div class="row between grade-line">
         <label for="tgrade-${t.id}" class="muted">ציון (אם יש)</label>
         <input id="tgrade-${t.id}" class="grade-input" type="number" inputmode="decimal" min="0" max="100" data-bind="task:${t.id}:grade" value="${esc(t.grade ?? '')}" placeholder="—">
       </div>
-      <h3 class="card-title">${ICON.camera} העבודה שלי</h3>
-      <p class="muted small">צילומים של העבודה המוכנה או הקובץ שהגשת — נשמר כתיעוד ללמידה למבחנים</p>
-      ${filesGrid(`task:${t.id}:work`, t.workFiles || [], { addLabel: 'צילום העבודה', accept: 'image/*,application/pdf,.doc,.docx,.ppt,.pptx' })}
     </div>`
   );
 
