@@ -71,7 +71,7 @@ function cleanupEmptyItem(r) {
 const TAB_OF = {
   home: 'home', exams: 'exams', exam: 'exams', tasks: 'tasks', task: 'tasks', study: 'study', library: 'library',
   item: 'library', subject: 'home', more: 'more', schedule: 'home', deck: 'study', review: 'study',
-  notebook: 'library', search: 'home', grades: 'exams', note: 'library',
+  notebook: 'library', search: 'home', grades: 'grades', note: 'library',
 };
 
 function render() {
@@ -823,7 +823,10 @@ const ACTIONS = {
     if (e.done && !e.doneAt) e.doneAt = Date.now();
     save();
     render();
-    toast(e.done ? 'המבחן סומן כהושלם ✓' : 'חזר למבחנים הקרובים');
+    if (!e.done) return toast('חזר למבחנים הקרובים');
+    // From a list: offer to jump straight to adding the grade.
+    if (routeName() !== `exam-${id}` && (e.grade === '' || e.grade == null)) toast('המבחן הוגש ✓ עבר ל"הוגשו"', 5000, { label: 'הוספת ציון', go: `#exam-${id}` });
+    else toast('המבחן הוגש ✓');
   },
   'exam-study'({ id }) {
     const e = exam(id);

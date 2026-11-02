@@ -1411,3 +1411,14 @@ mark { background: color-mix(in srgb, var(--accent) 22%, transparent); color: in
 .ncolor { width: 30px; height: 30px; border-radius: 50%; background: var(--nbg); box-shadow: inset 0 0 0 1px var(--sep); }
 .ncolor.on { box-shadow: 0 0 0 2px var(--bg, var(--card)), 0 0 0 4px var(--accent); }
 .grade-actions .btn { white-space: nowrap; }
+
+/* exams: check circle like tasks, הוגשו summary */
+.exam-wrap { position: relative; }
+.exam-card.with-check .exam-main { padding-inline-start: 50px; }
+.exam-check { position: absolute; top: 50%; inset-inline-start: 19px; transform: translateY(-50%); background: var(--card); z-index: 1; }
+.exam-check:active { transform: translateY(-50%) scale(0.9); }
+.done-sum { display: flex; align-items: center; gap: 12px; width: 100%; text-align: start; padding: 14px 16px; cursor: pointer; }
+.done-sum:active { opacity: 0.75; }
+.done-avg { display: flex; flex-direction: column; align-items: center; line-height: 1.1; }
+.done-avg small { font-size: 11px; color: var(--muted); }
+.done-avg b { font-size: 22px; }

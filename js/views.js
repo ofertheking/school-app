@@ -32,17 +32,25 @@ function statVal(min) {
   return `<span class="stat-value"><bdi>${value}</bdi> <small>${unit}</small></span>`;
 }
 
-export function examCard(e) {
+export function examCard(e, opts) {
+  const o = opts && typeof opts === 'object' ? opts : {}; // (also used as a .map() callback)
   const r = readiness(e);
   const n = daysUntil(e.date);
   const past = n < 0 || e.done;
-  const right =
-    e.grade !== '' && e.grade != null
-      ? `<span class="grade">${esc(e.grade)}</span>`
-      : past
-      ? `<span class="chip done">✓ נגמר</span>`
-      : `<span class="chip ${examUrgency(e)}">${relDay(e.date)}</span>`;
-  return `<button class="card exam-card" data-go="#exam-${e.id}">
+  const graded = e.grade !== '' && e.grade != null;
+  const right = graded
+    ? `<span class="grade">${esc(e.grade)}</span>`
+    : past
+    ? `<span class="chip done">✓ הוגש</span>`
+    : `<span class="chip ${examUrgency(e)}">${relDay(e.date)}</span>`;
+  const card = examCardInner(e, { r, n, past, graded, right, check: o.check });
+  if (!o.check) return card;
+  return `<div class="exam-wrap">${card}
+    <button class="check exam-check" data-act="exam-done" data-id="${e.id}" aria-label="סימון שהמבחן הוגש">${ICON.check}</button></div>`;
+}
+
+function examCardInner(e, { r, past, graded, right, check }) {
+  return `<button class="card exam-card${check ? ' with-check' : ''}" data-go="#exam-${e.id}">
     <span class="stripe" style="background:${subjectColor(e.subjectId)}"></span>
     <span class="exam-main">
       <span class="row between"><span class="eyebrow">${esc(subjectName(e.subjectId))} · ${esc(e.type || 'מבחן')}</span>${right}</span>
@@ -50,7 +58,7 @@ export function examCard(e) {
       <span class="muted small">${e.week ? `במהלך השבוע של ${fmtDate(e.date)}` : fmtDate(e.date)}${e.time ? ` · <bdi>${esc(e.time)}</bdi>` : ''}${(e.materialFiles || []).length + (e.itemIds || []).length ? ` · 📎 ${(e.materialFiles || []).length + (e.itemIds || []).length}` : ''}${(e.paperFiles || []).length ? ' · 📷' : ''}</span>
       ${
         past
-          ? ''
+          ? graded ? '' : `<span class="small accent">＋ להוסיף ציון</span>`
           : r != null
           ? `<span class="readiness">${meter(r, { label: 'מוכנות למבחן' })}<span class="small muted">${r}% מוכנות</span></span>`
           : `<span class="small accent">＋ להוסיף חומר למבחן</span>`
@@ -205,15 +213,15 @@ export function home() {
 // ---------- EXAMS ----------
 
 export function exams() {
-  if (!['upcoming', 'calendar', 'grades'].includes(S.ui.examsSeg)) S.ui.examsSeg = S.ui.examsSeg === 'past' ? 'grades' : 'upcoming';
-  const segCtl = seg('examsSeg', [['upcoming', 'קרובים'], ['calendar', 'לוח שנה'], ['grades', 'ציונים']]);
+  if (!['upcoming', 'done', 'calendar'].includes(S.ui.examsSeg)) S.ui.examsSeg = ['past', 'grades'].includes(S.ui.examsSeg) ? 'done' : 'upcoming';
+  const segCtl = seg('examsSeg', [['upcoming', 'קרובים'], ['done', 'הוגשו'], ['calendar', 'לוח שנה']]);
   let body;
   if (S.ui.examsSeg === 'calendar') body = calendarView(examCard, taskRow);
-  else if (S.ui.examsSeg === 'grades') body = gradesView(examCard);
+  else if (S.ui.examsSeg === 'done') body = doneExams();
   else {
     const list = upcomingExams();
     body = list.length
-      ? `<div class="stack">${list.map(examCard).join('')}</div>`
+      ? `<div class="stack">${list.map((e) => examCard(e, { check: true })).join('')}</div>`
       : `<div class="card">${empty('📅', 'אין מבחנים קרובים. אפשר להוסיף מבחן, או לייבא את לוח המבחנים של בית הספר מקובץ PDF.', `<div class="row gap center-row">${boardButton('btn primary', `${ICON.clip} ייבוא לוח מבחנים`)}<button class="btn tinted" data-act="add-exam">${ICON.plus} הוספת מבחן</button></div>`)}</div>`;
   }
   return `
@@ -222,6 +230,34 @@ export function exams() {
     ${body}
     ${S.ui.examsSeg === 'upcoming' && upcomingExams().length ? `<p class="muted small center">יש לך את לוח המבחנים כ-PDF? ${boardButton('link-btn inline', 'ייבוא מלוח מבחנים')}</p>` : ''}
   `;
+}
+
+const MONTH_YEAR = new Intl.DateTimeFormat('he-IL', { month: 'long', year: 'numeric' });
+
+/** הוגשו: every exam that's behind you, newest first, grouped by month. */
+function doneExams() {
+  const list = pastExams();
+  if (!list.length) {
+    return `<div class="card">${empty('📭', 'עוד אין מבחנים שהוגשו. כשתאריך המבחן עובר, או כשמסמנים ✓ על המבחן, הוא עובר לכאן.', `<button class="btn tinted" data-act="add-exam">${ICON.plus} מבחן שכבר היה</button>`)}</div>`;
+  }
+  const graded = list.filter((e) => e.grade !== '' && e.grade != null && !isNaN(+e.grade));
+  const avg = graded.length ? Math.round((graded.reduce((a, e) => a + +e.grade, 0) / graded.length) * 10) / 10 : null;
+  const groups = new Map();
+  for (const e of list) {
+    const k = e.date.slice(0, 7);
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(e);
+  }
+  return `
+    <button class="card done-sum" data-go="#grades">
+      <span class="grow"><b>${list.length} ${list.length === 1 ? 'מבחן הוגש' : 'מבחנים הוגשו'}</b>
+        <span class="sr-sub">${graded.length} עם ציון${list.length > graded.length ? ` · ${list.length - graded.length} מחכים לציון` : ''}</span></span>
+      ${avg != null ? `<span class="done-avg"><small>ממוצע</small><b>${avg}</b></span>` : ''}<span class="chev">${ICON.fwd}</span>
+    </button>
+    ${[...groups.entries()]
+      .map(([k, arr]) => `<h3 class="group-title">${MONTH_YEAR.format(new Date(`${k}-15T12:00:00`))}</h3><div class="stack">${arr.map((e) => examCard(e)).join('')}</div>`)
+      .join('')}
+    <div class="pad"><button class="btn tinted block" data-act="add-exam">${ICON.plus} הוספת מבחן שכבר היה</button></div>`;
 }
 
 const TOPIC_STATES = [
@@ -242,7 +278,7 @@ export function examDetail(id) {
   const linked = (e.itemIds || []).map((x) => item(x)).filter(Boolean);
   const hasGrade = e.grade !== '' && e.grade != null;
   const big = past
-    ? `<b class="hero-num">${hasGrade ? esc(e.grade) : '✓'}</b><span>${hasGrade ? 'ציון' : 'המבחן נגמר'}</span>`
+    ? `<b class="hero-num">${hasGrade ? esc(e.grade) : '✓'}</b><span>${hasGrade ? 'ציון' : 'המבחן הוגש'}</span>`
     : n > 1 ? `<b class="hero-num">${n}</b><span>ימים למבחן</span>` : n === 1 ? `<b class="hero-num">מחר</b><span>בהצלחה!</span>` : `<b class="hero-num">היום</b><span>בהצלחה! 🍀</span>`;
 
   const material = section(
@@ -334,7 +370,7 @@ export function examDetail(id) {
     ${past ? '' : paper}
 
     <div class="actions-col">
-      <button class="btn ${e.done ? 'ghost' : 'tinted'} block" data-act="exam-done" data-id="${e.id}">${e.done ? '↩︎ המבחן עוד לא נגמר' : '✓ סימון שהמבחן נגמר'}</button>
+      <button class="btn ${e.done ? 'ghost' : 'tinted'} block" data-act="exam-done" data-id="${e.id}">${e.done ? '↩︎ החזרה למבחנים הקרובים' : '✓ סימון שהמבחן הוגש'}</button>
       ${n >= 0 && !e.done ? `<button class="btn tinted block" data-act="exam-cal" data-id="${e.id}">${ICON.calendar} הוספה ליומן עם תזכורת</button>` : ''}
       ${e.link ? `<a class="btn ghost block" href="${esc(e.link)}" target="_blank" rel="noopener">${ICON.ext} פתיחה ב-Classroom</a>` : ''}
       <button class="btn danger-ghost block" data-act="del-exam" data-id="${e.id}">${ICON.trash} מחיקת המבחן</button>

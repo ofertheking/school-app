@@ -295,7 +295,7 @@ export function gradesView(examCard) {
 
 /** #grades — the full screen. */
 export function gradesPage(examCard) {
-  return `${head('ציונים', { back: '#home', actions: iconBtn('add-grade', ICON.plus, 'הוספת ציון') })}${gradesView(examCard)}`;
+  return `${head('ציונים', { actions: iconBtn('add-grade', ICON.plus, 'הוספת ציון') })}${gradesView(examCard)}`;
 }
 
 /** What grade on the next (equal-weight) exam brings the average to `target`. */
