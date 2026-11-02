@@ -22,6 +22,7 @@ import { decksList } from './flashcards.js';
 import { filesGrid, attachBar, filesSummary } from './files.js';
 import { notebooksGrid } from './notebooks.js';
 import { recoverCard } from './recover.js';
+import { boardButton } from './examBoard.js';
 
 // ---------- shared bits ----------
 
@@ -45,7 +46,7 @@ export function examCard(e) {
     <span class="exam-main">
       <span class="row between"><span class="eyebrow">${esc(subjectName(e.subjectId))} · ${esc(e.type || 'מבחן')}</span>${right}</span>
       <span class="title">${esc(e.title || e.type || 'מבחן')}</span>
-      <span class="muted small">${fmtDate(e.date)}${e.time ? ` · <bdi>${esc(e.time)}</bdi>` : ''}${(e.materialFiles || []).length + (e.itemIds || []).length ? ` · 📎 ${(e.materialFiles || []).length + (e.itemIds || []).length}` : ''}${(e.paperFiles || []).length ? ' · 📷' : ''}</span>
+      <span class="muted small">${e.week ? `במהלך השבוע של ${fmtDate(e.date)}` : fmtDate(e.date)}${e.time ? ` · <bdi>${esc(e.time)}</bdi>` : ''}${(e.materialFiles || []).length + (e.itemIds || []).length ? ` · 📎 ${(e.materialFiles || []).length + (e.itemIds || []).length}` : ''}${(e.paperFiles || []).length ? ' · 📷' : ''}</span>
       ${
         past
           ? ''
@@ -210,12 +211,13 @@ export function exams() {
     const list = upcomingExams();
     body = list.length
       ? `<div class="stack">${list.map(examCard).join('')}</div>`
-      : `<div class="card">${empty('📅', 'אין מבחנים קרובים. אפשר להוסיף מבחנים, או לייבא את לוח המבחנים מוובטופ בהגדרות.', `<button class="btn tinted" data-act="add-exam">${ICON.plus} הוספת מבחן</button>`)}</div>`;
+      : `<div class="card">${empty('📅', 'אין מבחנים קרובים. אפשר להוסיף מבחן, או לייבא את לוח המבחנים של בית הספר מקובץ PDF.', `<div class="row gap center-row">${boardButton('btn primary', `${ICON.clip} ייבוא לוח מבחנים`)}<button class="btn tinted" data-act="add-exam">${ICON.plus} הוספת מבחן</button></div>`)}</div>`;
   }
   return `
-    ${head('מבחנים', { actions: iconBtn('add-exam', ICON.plus, 'הוספת מבחן') })}
+    ${head('מבחנים', { actions: `${boardButton('icon-btn pdf-btn', '<b>PDF</b>')}${iconBtn('add-exam', ICON.plus, 'הוספת מבחן')}` })}
     ${segCtl}
     ${body}
+    ${S.ui.examsSeg === 'upcoming' && upcomingExams().length ? `<p class="muted small center">יש לך את לוח המבחנים כ-PDF? ${boardButton('link-btn inline', 'ייבוא מלוח מבחנים')}</p>` : ''}
   `;
 }
 
@@ -302,7 +304,7 @@ export function examDetail(id) {
     ${head(e.title || e.type || 'מבחן', {
       back: '#exams',
       actions: iconBtn('edit-exam', ICON.edit, 'עריכה', `data-id="${e.id}"`),
-      sub: `${dot(e.subjectId)} ${esc(subjectName(e.subjectId))} · ${esc(e.type || 'מבחן')} · ${fmtDate(e.date)}${e.time ? ` · <bdi>${esc(e.time)}</bdi>` : ''}`,
+      sub: `${dot(e.subjectId)} ${esc(subjectName(e.subjectId))} · ${esc(e.type || 'מבחן')} · ${e.week ? `במהלך השבוע של ${fmtDate(e.date)}` : fmtDate(e.date)}${e.time ? ` · <bdi>${esc(e.time)}</bdi>` : ''}`,
     })}
     <div class="card countdown ${n >= 0 ? examUrgency(e) : 'past'}">${big}</div>
 

@@ -192,6 +192,15 @@ export async function importTimetablePdf(file) {
   }
   close();
   if (!res.lessons.length) {
+    // Picked the exam board (לוח מבחנים) by mistake? Import it as exams instead.
+    try {
+      const { parseExamBoardPdf, importExamBoard } = await import('./examBoard.js');
+      const board = await parseExamBoardPdf(file);
+      if (board.columns.some((c) => c.events.length >= 3)) {
+        toast('זה לוח מבחנים, לא מערכת שעות — עובר לייבוא מבחנים', 3500);
+        return importExamBoard(null, board);
+      }
+    } catch { /* not a board either */ }
     const why =
       res.reason === 'no-text'
         ? 'ב-PDF הזה אין טקסט, רק תמונה (למשל צילום מסך שנשמר כ-PDF), ולכן אי אפשר לקרוא ממנו.'

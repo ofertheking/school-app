@@ -24,6 +24,7 @@ import * as Notebooks from './notebooks.js';
 import * as Search from './search.js';
 import * as Calendar from './calendar.js';
 import * as Recover from './recover.js';
+import * as Board from './examBoard.js';
 import { applyAppearance } from './appearance.js';
 import { ICON } from './icons.js';
 import {
@@ -1138,6 +1139,11 @@ document.addEventListener('change', async (e) => {
     const f = el.files[0];
     el.value = '';
     await Sched.importTimetablePdf(f);
+  }
+  if (el.hasAttribute('data-board-pdf')) {
+    const f = el.files[0];
+    el.value = '';
+    await Board.importExamBoard(f);
   }
   if (el.hasAttribute('data-import') && el.files[0]) {
     await importBackup(el.files[0]);

@@ -267,6 +267,7 @@ export function webtopRows() {
   const t = (inner, color) => `<span class="tile-ico t-${color}" aria-hidden="true">${inner}</span>`;
   return `<div class="card list">
     <button class="row-btn" data-go="#schedule">${t(ICON.calendar, 'green')}<span class="grow">ייבוא מערכת שעות מ-PDF<span class="sr-sub">הדרך המומלצת — עובד מצוין עם הקובץ של וובטופ</span></span>${chev}</button>
+    <label class="row-btn">${t(ICON.exam, 'red')}<span class="grow">ייבוא לוח מבחנים מ-PDF<span class="sr-sub">רק המבחנים של השכבה והמקצועות שלך</span></span>${chev}<input type="file" accept="application/pdf,.pdf" data-board-pdf hidden></label>
     <button class="row-btn" data-act="webtop-paste">${t(ICON.tasks, 'orange')}<span class="grow">ייבוא מבחנים בהעתק-הדבק</span>${chev}</button>
     <a class="row-btn" href="https://webtop.smartschool.co.il/" target="_blank" rel="noopener">${t(ICON.ext, 'gray')}<span class="grow">פתיחת וובטופ</span>${chev}</a>
   </div>
