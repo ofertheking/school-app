@@ -1315,3 +1315,99 @@ mark { background: color-mix(in srgb, var(--accent) 22%, transparent); color: in
 .class-pick.attn { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 55%, transparent); }
 .fit-yes { color: var(--good-text); font-weight: 600; }
 .fit-no { color: var(--danger-text); font-weight: 600; }
+
+/* ---------- grades hub ---------- */
+.hero-stats { display: flex; gap: 26px; justify-content: center; margin-top: 12px; flex-wrap: wrap; }
+.hero-stats .stat-value { font-size: 17px; }
+.trend { padding: 12px 12px 10px; }
+.trend-legend { display: flex; gap: 14px; justify-content: flex-start; margin: 0 4px 4px; }
+.trend-legend .lk { display: inline-flex; align-items: center; gap: 6px; }
+.lk-dot { width: 8px; height: 8px; border-radius: 50%; background: color-mix(in srgb, var(--accent) 45%, transparent); display: inline-block; }
+.lk-line { width: 14px; height: 2px; border-radius: 1px; background: var(--accent); display: inline-block; }
+.g-dot { fill: color-mix(in srgb, var(--accent) 45%, var(--card)); stroke: var(--card); stroke-width: 2; }
+.g-line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.g-end { fill: var(--accent); stroke: var(--card); stroke-width: 2; }
+.report { padding: 6px 4px; overflow-x: auto; }
+.report table { width: 100%; border-collapse: collapse; font-size: 15px; }
+.report th { font-size: 12px; font-weight: 500; color: var(--muted); padding: 6px 8px; text-align: center; }
+.report th:first-child, .report td:first-child { text-align: start; }
+.report td { padding: 9px 8px; text-align: center; border-top: 0.5px solid var(--sep); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.report td:first-child { white-space: normal; }
+.report tfoot td { color: var(--text-2); font-weight: 600; }
+.report .dot { vertical-align: middle; }
+.grade-actions { margin-top: 4px; }
+.calc { margin: 10px 0 2px; font-size: 15px; line-height: 1.45; }
+.calc.ok { color: var(--good-text); }
+.calc.hard { color: var(--serious-text); }
+.units-row { margin-top: 14px; padding-top: 12px; border-top: 0.5px solid var(--sep); }
+.weight-row { margin-top: 10px; }
+.weight-input {
+  width: 96px; flex: none; text-align: center; font-size: 16px; padding: 8px; border-radius: 10px;
+  border: 0; background: var(--fill); color: var(--text);
+}
+.stat-link { text-align: start; cursor: pointer; display: flex; flex-direction: column; }
+.stat-link .stat-label { color: var(--accent-text); }
+.ir-grade { width: 68px !important; flex: none; text-align: center; font-weight: 700; }
+
+/* attendance */
+.att-stats { display: flex; align-items: center; gap: 22px; }
+.att-stats .btn { margin-inline-start: auto; }
+.att-rows { margin-top: 12px; }
+.att-row { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-top: 0.5px solid var(--sep); }
+.att-pct { font-weight: 700; font-size: 14px; color: var(--text-2); min-width: 38px; text-align: end; }
+.att-pct.warn { color: var(--serious-text); }
+.att-recent summary { color: var(--accent-text); cursor: pointer; font-size: 14px; margin-top: 10px; }
+.att-mark { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 2px 0 12px; }
+.att-mark.on { color: var(--serious-text); font-weight: 600; font-size: 14px; }
+
+/* ---------- notes (פתקים) ---------- */
+:root {
+  --n-yellow: #fff3bf; --n-green: #dcf3e2; --n-blue: #dbeafe; --n-pink: #ffe0eb;
+  --n-purple: #ebe2ff; --n-orange: #ffe4c8; --n-plain: var(--card);
+}
+:root[data-theme="dark"] {
+  --n-yellow: #3a3420; --n-green: #1f3527; --n-blue: #1d2e44; --n-pink: #3d2430;
+  --n-purple: #2f2849; --n-orange: #3c2c1b; --n-plain: var(--card);
+}
+.c-yellow { --nbg: var(--n-yellow); } .c-green { --nbg: var(--n-green); } .c-blue { --nbg: var(--n-blue); }
+.c-pink { --nbg: var(--n-pink); } .c-purple { --nbg: var(--n-purple); } .c-orange { --nbg: var(--n-orange); }
+.c-plain { --nbg: var(--n-plain); }
+.notes-grid { columns: 2; column-gap: 10px; }
+.note-card {
+  display: flex; flex-direction: column; gap: 6px; break-inside: avoid; margin-bottom: 10px; position: relative;
+  background: var(--nbg, var(--n-yellow)); border-radius: 16px; padding: 12px 14px 10px; cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05); transition: transform 0.15s ease;
+  text-align: start; color: var(--text);
+}
+.note-card:active { transform: scale(0.97); }
+.nc-title { font-size: 16px; line-height: 1.3; overflow-wrap: anywhere; padding-inline-end: 18px; }
+.nc-pin { position: absolute; top: 10px; inset-inline-end: 10px; color: var(--muted); display: flex; }
+.nc-pin svg { width: 14px; height: 14px; }
+.nc-body { display: flex; flex-direction: column; gap: 2px; font-size: 14px; line-height: 1.4; color: var(--text-2); overflow-wrap: anywhere; }
+.nl.chk { display: flex; align-items: flex-start; gap: 6px; }
+.nl.chk.on > span { text-decoration: line-through; color: var(--muted); }
+.nchk {
+  flex: none; width: 18px; height: 18px; margin-top: 1px; border-radius: 5px; border: 1.5px solid var(--axis);
+  display: flex; align-items: center; justify-content: center; color: transparent; position: relative;
+}
+.nchk::after { content: ""; position: absolute; inset: -8px; }
+.nchk svg { width: 12px; height: 12px; }
+.nl.chk.on .nchk { background: var(--accent); border-color: var(--accent); color: #fff; }
+.nc-foot { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--muted); margin-top: 2px; }
+.nc-count { margin-inline-start: auto; font-weight: 600; }
+.note-strip { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; padding: 2px 2px 6px; margin: 0 -2px; scrollbar-width: none; }
+.note-strip::-webkit-scrollbar { display: none; }
+.note-strip .note-card { flex: none; width: 150px; min-height: 120px; margin: 0; scroll-snap-align: start; }
+.note-card.add {
+  align-items: center; justify-content: center; gap: 6px; background: transparent;
+  border: 2px dashed var(--fill-2, var(--sep)); color: var(--accent-text); font-weight: 600; font-size: 14px; box-shadow: none;
+}
+.note-card.add svg { width: 24px; height: 24px; }
+.note-editor { background: var(--nbg, var(--n-yellow)); border-radius: 18px; padding: 16px 16px 8px; margin-bottom: 12px; }
+.note-title { width: 100%; border: 0; background: transparent; font-size: 22px; font-weight: 700; color: var(--text); outline: none; padding: 2px 0 8px; }
+.note-body { width: 100%; border: 0; background: transparent; font-size: 17px; line-height: 1.6; color: var(--text); outline: none; resize: none; min-height: 220px; }
+.note-tools { display: flex; flex-direction: column; gap: 12px; padding: 0 4px; }
+.note-colors { display: flex; gap: 10px; flex-wrap: wrap; }
+.ncolor { width: 30px; height: 30px; border-radius: 50%; background: var(--nbg); box-shadow: inset 0 0 0 1px var(--sep); }
+.ncolor.on { box-shadow: 0 0 0 2px var(--bg, var(--card)), 0 0 0 4px var(--accent); }
+.grade-actions .btn { white-space: nowrap; }

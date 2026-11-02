@@ -23,6 +23,8 @@ function defaults() {
     lessons: [],
     decks: [],
     cards: [],
+    attendance: [],
+    notes: [],
     settings: {
       weeklyGoalH: 10,
       pomodoroMin: 25,
@@ -39,7 +41,8 @@ function defaults() {
 }
 
 // Content that belongs to one school year (everything but profile/settings/years).
-export const YEAR_KEYS = ['subjects', 'exams', 'tasks', 'sessions', 'items', 'lessons', 'decks', 'cards'];
+export const YEAR_KEYS = ['subjects', 'exams', 'tasks', 'sessions', 'items', 'lessons', 'decks', 'cards', 'attendance'];
+// Notes (פתקים) are personal, not per school year: they stay when switching years.
 
 /** Israeli school year label for a date, e.g. "2026/27" (starts ~September). */
 export function schoolYearName(d = new Date()) {
@@ -67,6 +70,8 @@ export const S = {
     q: '',
     calMonth: '',
     calDay: '',
+    gradeSem: 'all',
+    noteQ: '',
   },
 };
 
@@ -88,7 +93,7 @@ export async function load() {
   }
 }
 
-const hasContent = (d) => YEAR_KEYS.some((k) => k !== 'subjects' && d[k]?.length);
+const hasContent = (d) => [...YEAR_KEYS, 'notes'].some((k) => k !== 'subjects' && d[k]?.length);
 
 /** Once a day, keep a copy of the data as it was when the app opened (last 10 days). */
 export async function autoSnapshot() {
@@ -97,7 +102,7 @@ export async function autoSnapshot() {
     const key = `snap:${isoDate()}`;
     const snaps = (await listStateKeys()).filter((k) => k.startsWith('snap:')).sort();
     if (!snaps.includes(key)) {
-      const snap = { currentYear: S.data.currentYear, takenAt: Date.now() };
+      const snap = { currentYear: S.data.currentYear, takenAt: Date.now(), notes: S.data.notes };
       for (const k of YEAR_KEYS) snap[k] = S.data[k];
       await saveState(snap, key);
       snaps.push(key);
@@ -114,7 +119,7 @@ export function migrate(saved) {
   out.settings = { ...d.settings, ...(saved.settings || {}) };
   out.settings.webtop = { ...d.settings.webtop, ...(saved.settings?.webtop || {}) };
   out.settings.appearance = { ...d.settings.appearance, ...(saved.settings?.appearance || {}) };
-  for (const k of YEAR_KEYS) {
+  for (const k of [...YEAR_KEYS, 'notes']) {
     if (!Array.isArray(out[k])) out[k] = [];
   }
   if (!Array.isArray(out.years) || !out.years.length) {
@@ -155,6 +160,7 @@ export function nextColor() {
 export const exam = (id) => S.data.exams.find((e) => e.id === id);
 export const task = (id) => S.data.tasks.find((t) => t.id === id);
 export const item = (id) => S.data.items.find((i) => i.id === id);
+export const note = (id) => S.data.notes.find((n) => n.id === id);
 
 /** 0..100 or null when the exam has no topics yet. */
 export function readiness(e) {
@@ -187,22 +193,46 @@ export const hasGrade = (x) => x && x.grade != null && String(x.grade).trim() !=
 
 /** Every grade (exams + graded tasks), oldest first, in one shape. */
 export function gradedRecords(subjectId) {
+  const w = (x) => (x.weight !== '' && x.weight != null && +x.weight > 0 ? +x.weight : null);
   const exams = S.data.exams.filter(hasGrade).map((e) => ({
-    kind: 'exam', id: e.id, subjectId: e.subjectId, title: e.title || e.type || 'מבחן', date: e.date, grade: +e.grade, href: `#exam-${e.id}`,
+    kind: 'exam', id: e.id, subjectId: e.subjectId, title: e.title || e.type || 'מבחן', type: e.type || 'מבחן',
+    date: e.date, grade: +e.grade, weight: w(e), href: `#exam-${e.id}`,
   }));
   const tasks = S.data.tasks.filter(hasGrade).map((t) => ({
-    kind: 'task', id: t.id, subjectId: t.subjectId, title: t.title || 'משימה',
-    date: t.due || isoDate(new Date(t.doneAt || t.createdAt || Date.now())), grade: +t.grade, href: `#task-${t.id}`,
+    kind: 'task', id: t.id, subjectId: t.subjectId, title: t.title || 'משימה', type: 'משימה',
+    date: t.due || isoDate(new Date(t.doneAt || t.createdAt || Date.now())), grade: +t.grade, weight: w(t), href: `#task-${t.id}`,
   }));
   return [...exams, ...tasks]
     .filter((r) => subjectId == null || r.subjectId === subjectId)
     .sort((a, b) => a.date.localeCompare(b.date));
 }
 
+/** Israeli school half-years: מחצית א׳ = Sep–Jan, מחצית ב׳ = Feb–Aug. */
+export const semesterOf = (iso) => {
+  const m = +String(iso).slice(5, 7);
+  return m >= 9 || m === 1 ? 'a' : 'b';
+};
+
+/**
+ * Average of grade records, using their weights (משקל %) when some have one:
+ * a grade with no weight counts like the average of the given weights.
+ */
+export function weightedAverage(list) {
+  if (!list.length) return null;
+  const given = list.map((r) => r.weight).filter((x) => x != null);
+  const dflt = given.length ? given.reduce((a, b) => a + b, 0) / given.length : 1;
+  let sw = 0;
+  let sg = 0;
+  for (const r of list) {
+    const wt = r.weight ?? dflt;
+    sw += wt;
+    sg += r.grade * wt;
+  }
+  return sw ? Math.round((sg / sw) * 10) / 10 : null;
+}
+
 export function gradeAverage(subjectId) {
-  const g = gradedRecords(subjectId || null).map((r) => r.grade);
-  if (!g.length) return null;
-  return Math.round((g.reduce((a, b) => a + b, 0) / g.length) * 10) / 10;
+  return weightedAverage(gradedRecords(subjectId || null));
 }
 
 export function minutesBetween(from, to, filter = {}) {

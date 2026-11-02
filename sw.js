@@ -1,5 +1,5 @@
 // Offline support + on-device .ics generation for "add to calendar".
-const CACHE = 'school-app-v17';
+const CACHE = 'school-app-v18';
 const ASSETS = [
   './',
   './index.html',
@@ -30,6 +30,7 @@ const ASSETS = [
   './js/calendar.js',
   './js/recover.js',
   './js/examBoard.js',
+  './js/notes.js',
   './webtop-worker.js',
   './icons/icon-180.png',
   './icons/icon-192.png',

@@ -1,6 +1,6 @@
 // Boot, routing, event wiring and all user actions.
 import {
-  S, load, save, saveNow, migrate, autoSnapshot, subject, exam, task, item, nextColor, timerElapsed,
+  S, load, save, saveNow, migrate, autoSnapshot, subject, exam, task, item, note, nextColor, timerElapsed,
   subjectName, EXAM_TYPES, createItem, deck,
   YEAR_KEYS, switchYear, addYear, renameYear, archiveCurrentYear,
 } from './core.js';
@@ -25,6 +25,8 @@ import * as Search from './search.js';
 import * as Calendar from './calendar.js';
 import * as Recover from './recover.js';
 import * as Board from './examBoard.js';
+import * as Grades from './grades.js';
+import * as Notes from './notes.js';
 import { applyAppearance } from './appearance.js';
 import { ICON } from './icons.js';
 import {
@@ -45,7 +47,17 @@ function navigate(hash) {
   else location.hash = hash;
 }
 
+let lastNoteId = null;
 function cleanupEmptyItem(r) {
+  // A note that was opened and left empty disappears, like in Notes.
+  if (lastNoteId && r !== `note-${lastNoteId}`) {
+    const n = note(lastNoteId);
+    if (n && Notes.isEmptyNote(n)) {
+      S.data.notes = S.data.notes.filter((x) => x !== n);
+      save();
+    }
+  }
+  lastNoteId = r.startsWith('note-') ? r.slice(5) : null;
   if (lastItemId && r !== `item-${lastItemId}`) {
     const it = item(lastItemId);
     if (it && !it.title?.trim() && !it.body?.trim() && !it.url?.trim() && !(it.files || []).length) {
@@ -59,7 +71,7 @@ function cleanupEmptyItem(r) {
 const TAB_OF = {
   home: 'home', exams: 'exams', exam: 'exams', tasks: 'tasks', task: 'tasks', study: 'study', library: 'library',
   item: 'library', subject: 'home', more: 'more', schedule: 'home', deck: 'study', review: 'study',
-  notebook: 'library', search: 'home',
+  notebook: 'library', search: 'home', grades: 'exams', note: 'library',
 };
 
 function render() {
@@ -78,6 +90,8 @@ function render() {
       more: V.more,
       exam: () => V.examDetail(id),
       task: () => V.taskDetail(id),
+      grades: () => (id ? Grades.subjectGradesPage(id) : Grades.gradesPage(V.examCard)),
+      note: () => Notes.noteEditor(id),
       item: () => V.itemDetail(id),
       subject: () => V.subjectDetail(id),
       schedule: Sched.schedulePage,
@@ -454,9 +468,15 @@ function addItemSheet(subjectId) {
 
 // ---------------------------------------------------------------- webtop import
 
-function webtopSheet() {
+/**
+ * Paste-import from Webtop (or any table): exams, homework or grades.
+ * What was pasted is detected automatically; the tabs switch it by hand.
+ */
+function webtopSheet(preset) {
   let rows = [];
-  let as = 'exam';
+  let as = ['exam', 'task', 'grade'].includes(preset) ? preset : 'exam';
+  let lastText = '';
+  const label = () => ({ exam: 'מבחנים', task: 'משימות', grade: 'ציונים' })[as];
   const rowsHTML = () =>
     rows.length
       ? `<p class="small"><b>נמצאו ${rows.length}</b> — אפשר לתקן לפני שמירה:</p>
@@ -465,7 +485,10 @@ function webtopSheet() {
              (r, i) => `<div class="import-row">
                <input type="checkbox" data-i="${i}" data-f="on" ${r.on ? 'checked' : ''} aria-label="לייבא">
                <div class="grow">
-                 <input class="ir-title" data-i="${i}" data-f="title" value="${esc(r.title)}" aria-label="נושא">
+                 <div class="row gap">
+                   <input class="ir-title grow" data-i="${i}" data-f="title" value="${esc(r.title)}" aria-label="נושא">
+                   ${as === 'grade' ? `<input class="ir-grade" type="number" inputmode="decimal" min="0" max="100" data-i="${i}" data-f="grade" value="${esc(r.grade)}" aria-label="ציון">` : ''}
+                 </div>
                  <div class="row gap">
                    <input type="date" data-i="${i}" data-f="date" value="${r.date}" aria-label="תאריך">
                    <select data-i="${i}" data-f="subjectId" aria-label="מקצוע">${subjectOptions(r.subjectId, { allowNew: false })}</select>
@@ -474,13 +497,18 @@ function webtopSheet() {
              </div>`
            )
            .join('')}</div>
-         <button class="btn primary block" data-import-go>שמירת ${rows.filter((r) => r.on).length} פריטים</button>`
+         <button class="btn primary block" data-import-go>שמירת ${rows.filter((r) => r.on).length} ${label()}</button>`
       : '';
+  const segBtn = (k, l) => `<button class="seg-btn${as === k ? ' on' : ''}" data-as="${k}">${l}</button>`;
   openSheet(
     `<div class="sheet-head"><button type="button" class="link-btn" data-close>סגירה</button><h3>ייבוא מוובטופ</h3><span></span></div>
-     <p class="muted small">מעתיקים את הטבלה מ"לוח מבחנים" (או שיעורי בית) בוובטופ ומדביקים כאן. כל שורה עם תאריך תהפוך לפריט.</p>
-     <div class="seg"><button class="seg-btn on" data-as="exam">מבחנים</button><button class="seg-btn" data-as="task">משימות</button></div>
-     <textarea class="paste-box" rows="6" placeholder="לדוגמה:\n12/11/2026  מתמטיקה  מבחן בפונקציות\n19/11/2026  היסטוריה  בוחן פרק 3"></textarea>
+     <ol class="steps small muted">
+       <li>בוובטופ פותחים את <b>הציונים</b>, <b>לוח המבחנים</b> או <b>שיעורי הבית</b></li>
+       <li>לחיצה ארוכה על טקסט ← <b>"בחר הכל"</b> ← <b>"העתק"</b></li>
+       <li>חוזרים לכאן ולוחצים <b>הדבקה</b> — מה שהודבק מזוהה לבד</li>
+     </ol>
+     <div class="seg">${segBtn('exam', 'מבחנים')}${segBtn('task', 'משימות')}${segBtn('grade', 'ציונים')}</div>
+     <textarea class="paste-box" rows="6" placeholder="לדוגמה:\n12/11/2026  מתמטיקה  מבחן בפונקציות\n19/11/2026  היסטוריה  בוחן פרק 3  92"></textarea>
      <div class="row gap">
        <button class="btn ghost grow" data-paste>הדבקה</button>
        <button class="btn tinted grow" data-parse>זיהוי</button>
@@ -491,14 +519,24 @@ function webtopSheet() {
       onMount(sheet, close) {
         const box = sheet.querySelector('.paste-box');
         const out = sheet.querySelector('.import-out');
+        const setAs = (k) => {
+          as = k;
+          sheet.querySelectorAll('[data-as]').forEach((x) => x.classList.toggle('on', x.dataset.as === k));
+        };
         const parse = () => {
-          rows = parseScheduleText(box.value).map((r) => ({ ...r, on: true }));
-          out.innerHTML = rows.length ? rowsHTML() : `<p class="muted small center">לא נמצאו תאריכים בטקסט. צריך תאריכים כמו 12/11 או 12.11.2026</p>`;
+          const text = box.value;
+          // New text: guess what it is (grades pages mention "ציון" and carry 0–100 numbers).
+          if (text !== lastText && Grades.looksLikeGrades(text) && Grades.parseGradesText(text).length >= parseScheduleText(text).length / 2) setAs('grade');
+          lastText = text;
+          rows = (as === 'grade' ? Grades.parseGradesText(text) : parseScheduleText(text)).map((r) => ({ ...r, on: true }));
+          out.innerHTML = rows.length
+            ? rowsHTML()
+            : `<p class="muted small center">${as === 'grade' ? 'לא מצאתי ציונים. צריך שורות עם מקצוע או תאריך, וציון בין 0 ל-100.' : 'לא נמצאו תאריכים בטקסט. צריך תאריכים כמו 12/11 או 12.11.2026'}</p>`;
         };
         sheet.querySelectorAll('[data-as]').forEach((b) =>
           b.addEventListener('click', () => {
-            as = b.dataset.as;
-            sheet.querySelectorAll('[data-as]').forEach((x) => x.classList.toggle('on', x === b));
+            setAs(b.dataset.as);
+            if (box.value.trim()) parse();
           })
         );
         sheet.querySelector('[data-paste]').addEventListener('click', async () => {
@@ -517,7 +555,7 @@ function webtopSheet() {
           rows[+el.dataset.i][el.dataset.f] = el.type === 'checkbox' ? el.checked : el.value;
           if (el.type === 'checkbox') {
             const b = out.querySelector('[data-import-go]');
-            if (b) b.textContent = `שמירת ${rows.filter((r) => r.on).length} פריטים`;
+            if (b) b.textContent = `שמירת ${rows.filter((r) => r.on).length} ${label()}`;
           }
         };
         out.addEventListener('input', onEdit);
@@ -526,7 +564,15 @@ function webtopSheet() {
           if (!ev.target.closest('[data-import-go]')) return;
           let added = 0;
           for (const r of rows.filter((x) => x.on && x.date)) {
-            if (as === 'exam') {
+            if (as === 'grade') {
+              const g = String(r.grade).trim();
+              if (g === '' || isNaN(+g) || +g < 0 || +g > 100) continue;
+              if (S.data.exams.some((e) => e.date === r.date && e.subjectId === r.subjectId && String(e.grade) === g)) continue;
+              S.data.exams.push({
+                id: uid(), subjectId: r.subjectId, title: r.title, type: r.type || 'מבחן', date: r.date, time: '', topics: [], notes: '',
+                grade: g, weight: r.weight === '' || r.weight == null ? '' : String(r.weight), done: true, source: 'webtop', createdAt: Date.now(),
+              });
+            } else if (as === 'exam') {
               if (S.data.exams.some((e) => e.date === r.date && e.title === r.title)) continue;
               S.data.exams.push({ id: uid(), subjectId: r.subjectId, title: r.title, type: r.type, date: r.date, time: r.time, topics: [], notes: '', grade: '', source: 'webtop', createdAt: Date.now() });
             } else {
@@ -537,8 +583,8 @@ function webtopSheet() {
           }
           save();
           close();
-          navigate(as === 'exam' ? '#exams' : '#tasks');
-          toast(added ? `נוספו ${added} ${as === 'exam' ? 'מבחנים' : 'משימות'} 🎉` : 'הכל כבר קיים');
+          navigate(as === 'grade' ? '#grades' : as === 'exam' ? '#exams' : '#tasks');
+          toast(added ? `נוספו ${added} ${label()} 🎉` : 'הכל כבר קיים');
         });
       },
     }
@@ -963,7 +1009,7 @@ const ACTIONS = {
     render();
     toast('התנתקת מגוגל');
   },
-  'webtop-paste': () => webtopSheet(),
+  'webtop-paste': ({ as }) => webtopSheet(as),
   async copy({ text }) {
     try {
       await navigator.clipboard.writeText(text);
@@ -989,7 +1035,7 @@ const ACTIONS = {
   },
 };
 
-Object.assign(ACTIONS, Sched.actions, Cards.actions, Importer.actions, Webtop.actions, Files.actions, Notebooks.actions, Search.actions, Calendar.actions, Recover.actions, {
+Object.assign(ACTIONS, Sched.actions, Cards.actions, Importer.actions, Webtop.actions, Files.actions, Notebooks.actions, Search.actions, Calendar.actions, Recover.actions, Grades.actions, Notes.actions, {
   'exam-link-items'({ id }) {
     const e = exam(id);
     const chosen = new Set(e.itemIds || []);
@@ -1036,7 +1082,8 @@ Object.assign(ACTIONS, Sched.actions, Cards.actions, Importer.actions, Webtop.ac
 
 document.addEventListener('click', (e) => {
   const go = e.target.closest('[data-go]');
-  if (go) {
+  const inner = e.target.closest('[data-act]');
+  if (go && !(inner && go.contains(inner) && inner !== go)) {
     e.preventDefault();
     navigate(go.dataset.go);
     return;
@@ -1059,12 +1106,16 @@ function setPath(path, value) {
 
 function applyBind(el) {
   const [kind, id, field] = el.dataset.bind.split(':');
-  const obj = kind === 'exam' ? exam(id) : kind === 'task' ? task(id) : item(id);
+  const obj = kind === 'exam' ? exam(id) : kind === 'task' ? task(id) : kind === 'note' ? note(id) : item(id);
   if (!obj) return;
-  obj[field] = field === 'grade' ? el.value.trim() : el.value;
-  if (kind === 'item') obj.updatedAt = Date.now();
+  obj[field] = field === 'grade' || field === 'weight' ? el.value.trim() : el.value;
+  if (kind === 'item' || kind === 'note') obj.updatedAt = Date.now();
   save();
 }
+
+document.addEventListener('keydown', (e) => {
+  if (e.target.matches?.('.note-body')) Notes.onBodyKey(e);
+});
 
 // Swipe the home timetable card sideways to change day (RTL: swipe right = next day).
 let swipe0 = null;
@@ -1098,6 +1149,10 @@ document.addEventListener('input', (e) => {
     S.ui.q = el.value;
     document.getElementById('search-results').innerHTML = Search.searchResults(el.value);
   }
+  if (el.dataset.input === 'note-search') {
+    S.ui.noteQ = el.value;
+    document.getElementById('notes-results').innerHTML = Notes.notesResults();
+  }
   if (el.dataset.input === 'lib-query') {
     S.ui.libQuery = el.value;
     const list = document.getElementById('lib-list');
@@ -1129,6 +1184,7 @@ document.addEventListener('change', async (e) => {
     setPath(el.dataset.setting, v);
     save();
   }
+  if (el.dataset.subjField) Grades.onSubjectField(el);
   if (el.dataset.attachRef) await Files.onAttachInput(el);
   if (el.hasAttribute('data-nb-pages')) {
     const files = [...el.files];

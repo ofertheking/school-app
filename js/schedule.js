@@ -6,6 +6,7 @@ import { parseTimetablePdf } from './pdfTimetable.js';
 import { ICON } from './icons.js';
 import { head, iconBtn, empty, section } from './components.js';
 import { rerender } from './router.js';
+import { attendanceButtons } from './grades.js';
 
 export const DAY_NAMES = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
 const SCHOOL_DAYS = [0, 1, 2, 3, 4, 5];
@@ -313,6 +314,7 @@ function lessonSheet(l) {
       <h3>${esc(lessonName(l))}</h3>
       <p class="muted small">יום ${DAY_NAMES[l.day]}${l.start ? ` · <bdi>${esc(l.start)}${l.end ? `–${esc(l.end)}` : ''}</bdi>` : ''}${l.teacher ? ` · ${esc(l.teacher)}` : ''}${l.room ? ` · ${esc(l.room)}` : ''}</p>
     </div>
+    ${attendanceButtons(l, noteDate)}
     <div class="choice-list">
       <button class="choice" data-act="new-lesson-note" data-subject="${l.subjectId || ''}" data-date="${noteDate}" data-close>
         <span class="choice-icon">${ICON.note}</span><span class="choice-body"><b>סיכום שיעור</b><small>${fmtDate(noteDate)}</small></span></button>

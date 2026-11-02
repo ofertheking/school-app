@@ -71,6 +71,12 @@ export function searchResults(raw) {
       `${esc(subjectName(it.subjectId))}${norm(it.body).includes(q) ? ` · ${hl(snippet(it.body, qRaw), qRaw)}` : ''}`);
   }), items.length));
 
+  const notes = (d.notes || []).filter((n) => has(q, n.title, n.body, subjectName(n.subjectId)));
+  out.push(group('פתקים', notes.slice(0, LIMIT).map((n) =>
+    row(`data-go="#note-${n.id}"`, 'note', 'yellow', hl(n.title || (n.body || '').split('\n')[0] || 'פתק', qRaw),
+      `${n.subjectId ? `${esc(subjectName(n.subjectId))} · ` : ''}${norm(n.body).includes(q) ? hl(snippet(n.body, qRaw), qRaw) : ''}`)
+  ), notes.length));
+
   const decks = d.decks
     .map((dk) => ({ dk, card: d.cards.find((c) => c.deckId === dk.id && has(q, c.front, c.back)) }))
     .filter(({ dk, card }) => card || has(q, dk.title));

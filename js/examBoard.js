@@ -282,6 +282,25 @@ const TYPES = [
   [/בעל פה|בע"פ/, 'בעל פה'],
 ];
 
+/** The student's subject a text names (Hebrew prefixes, aliases, no חינוך/חינוך תעבורתי mix-ups). */
+export function matchSubject(text) {
+  const n = nk(text).replace(/(?:^|\s)(?:ללא|בלי|חוץ מ|לא כולל)\s+\S+/g, ' ');
+  let id = '';
+  let best = 0;
+  for (const s of S.data.subjects) {
+    for (const t of termsFor(s.name)) {
+      if (t.length > best && matches(n, t, s.name)) {
+        best = t.length;
+        id = s.id;
+      }
+    }
+  }
+  return id;
+}
+
+/** מבחן / בוחן / בגרות / עבודה… or '' when the text isn't an assessment. */
+export const typeOf = (text) => TYPES.find(([re]) => re.test(nk(text)))?.[1] || '';
+
 /**
  * One event text (may hold several, joined by "+") → assessments.
  * [{ title, type, week, subjectId, detected }] — non-exam events are dropped.
@@ -302,16 +321,7 @@ export function understand(text) {
     if (!type) continue; // holidays, "שבת שלום", elections…
     // "ללא הנדסיות" = everyone EXCEPT engineering: don't match the excluded subject.
     const n = full.replace(/(?:^|\s)(?:ללא|בלי|חוץ מ|לא כולל)\s+\S+/g, ' ').replace(/\s+/g, ' ').trim();
-    let subjectId = '';
-    let best = 0;
-    for (const s of S.data.subjects) {
-      for (const t of termsFor(s.name)) {
-        if (t.length > best && matches(n, t, s.name)) {
-          best = t.length;
-          subjectId = s.id;
-        }
-      }
-    }
+    const subjectId = matchSubject(n);
     let detected = '';
     if (!subjectId) {
       const sorted = [...KNOWN].sort((a, b) => b.length - a.length);

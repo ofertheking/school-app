@@ -13,7 +13,8 @@ import { ICON } from './icons.js';
 import { getToken, redirectURI, connectedEmail } from './integrations.js';
 import { storageMode } from './store.js';
 import { head, iconBtn, section, empty, seg, dot, subjectChip, tile } from './components.js';
-import { gradesView } from './grades.js';
+import { gradesView, gradesHomeCard } from './grades.js';
+import { notesBody, notesHomeSection } from './notes.js';
 import { calendarView } from './calendar.js';
 import { ACCENTS, appearance } from './appearance.js';
 import { todaySection } from './schedule.js';
@@ -180,6 +181,7 @@ export function home() {
     ${studyCard}
     ${quick}
     ${todaySection()}
+    ${gradesHomeCard()}
     ${section(
       'מבחנים קרובים',
       exams.length ? `<div class="stack">${exams.map(examCard).join('')}</div>` : `<div class="card">${empty('🎉', 'אין מבחנים קרובים', `<button class="btn tinted" data-act="add-exam">${ICON.plus} הוספת מבחן</button>`)}</div>`,
@@ -190,6 +192,7 @@ export function home() {
       tasks.length ? `<div class="card list">${tasks.map(taskRow).join('')}</div>` : `<div class="card">${empty('✅', 'אין משימות פתוחות')}</div>`,
       `<button class="link-btn" data-go="#tasks">הכל</button>`
     )}
+    ${notesHomeSection()}
     ${d.lessons.length ? '' : `<div class="card list"><button class="row-btn" data-go="#schedule">${tile('calendar', 'teal')}<span class="grow">מערכת שעות<span class="sr-sub">להוסיף ידנית או לייבא מ-PDF</span></span><span class="chev">${ICON.fwd}</span></button></div>`}
     ${
       d.subjects.length
@@ -294,6 +297,10 @@ export function examDetail(id) {
         <label for="grade-${e.id}" class="muted">${n > 0 ? 'הציון (אחרי שהמבחן חוזר)' : 'מה קיבלת?'}</label>
         <input id="grade-${e.id}" class="grade-input" type="number" inputmode="decimal" min="0" max="100" data-bind="exam:${e.id}:grade" value="${esc(e.grade ?? '')}" placeholder="—">
       </div>
+      <div class="row between weight-row">
+        <label for="weight-${e.id}" class="muted small">משקל בציון (%) — לא חובה</label>
+        <input id="weight-${e.id}" class="weight-input" type="number" inputmode="decimal" min="0" max="100" data-bind="exam:${e.id}:weight" value="${esc(e.weight ?? '')}" placeholder="רגיל">
+      </div>
       <h3 class="card-title">${ICON.camera} צילומי המבחן</h3>
       <p class="muted small">${past ? 'מצלמים את המבחן שחזר, כדי לשמור תיעוד וללמוד מהטעויות לבגרות' : 'כשהמבחן יחזור אפשר לצלם אותו כאן, כדי לשמור תיעוד'}</p>
       ${filesGrid(`exam:${e.id}:paper`, e.paperFiles || [], { addLabel: 'צילום המבחן', accept: 'image/*,application/pdf' })}
@@ -376,6 +383,10 @@ export function taskDetail(id) {
       <div class="row between grade-line">
         <label for="tgrade-${t.id}" class="muted">ציון (אם יש)</label>
         <input id="tgrade-${t.id}" class="grade-input" type="number" inputmode="decimal" min="0" max="100" data-bind="task:${t.id}:grade" value="${esc(t.grade ?? '')}" placeholder="—">
+      </div>
+      <div class="row between weight-row">
+        <label for="tweight-${t.id}" class="muted small">משקל בציון (%) — לא חובה</label>
+        <input id="tweight-${t.id}" class="weight-input" type="number" inputmode="decimal" min="0" max="100" data-bind="task:${t.id}:weight" value="${esc(t.weight ?? '')}" placeholder="רגיל">
       </div>
     </div>`
   );
@@ -548,7 +559,13 @@ export function libraryList() {
 
 export function library() {
   const kinds = [['all', 'הכל'], ['note', 'סיכומים'], ['lesson', 'סיכומי שיעור'], ['notebook', 'דפי מחברת'], ['file', 'קבצים ותמונות'], ['link', 'קישורים']];
-  const viewSeg = seg('libView', [['notebooks', 'מחברות'], ['all', 'כל החומר']]);
+  const viewSeg = seg('libView', [['notebooks', 'מחברות'], ['notes', 'פתקים'], ['all', 'כל החומר']]);
+  if (S.ui.libView === 'notes') {
+    return `
+      ${head('חומר וסיכומים', { actions: iconBtn('note-new', ICON.plus, 'פתק חדש') })}
+      ${viewSeg}
+      ${notesBody()}`;
+  }
   if (S.ui.libView !== 'all') {
     return `
       ${head('חומר וסיכומים', { actions: iconBtn('add-item', ICON.plus, 'הוספת חומר') })}
@@ -633,7 +650,7 @@ export function subjectDetail(id) {
     <div class="card stat-tiles three">
       <div class="stat"><span class="stat-label">השבוע</span>${statVal(weekMin)}</div>
       <div class="stat"><span class="stat-label">סה״כ</span>${statVal(totalMin)}</div>
-      <div class="stat"><span class="stat-label">ממוצע</span><span class="stat-value">${avg ?? '—'}</span></div>
+      <button class="stat stat-link" data-go="#grades-${id}"><span class="stat-label">ממוצע ›</span><span class="stat-value">${avg ?? '—'}</span></button>
     </div>
     <button class="card row-btn nb-link" data-go="#notebook-${id}">📓<span class="grow"><b>המחברת של ${esc(s.name)}</b><br><span class="muted small">דפי מחברת, סיכומים, קבצים וכרטיסיות</span></span><span class="chev">${ICON.fwd}</span></button>
     <div class="quick">
