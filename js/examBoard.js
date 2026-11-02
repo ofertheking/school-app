@@ -324,15 +324,133 @@ export function understand(text) {
       }
     }
     const track = /מגמ/.test(full) && !subjectId; // "מבחן מגמות גוש א" — which track is yours?
-    out.push({ title: tidy(part.replace(/^[-–\s]+|[-–\s]+$/g, '')), type, week, subjectId, detected: track && !detected ? '' : detected, track });
+    const refs = classRefs(part);
+    out.push({
+      title: tidy(stripClasses(part).replace(/^[-–\s]+|[-–\s]+$/g, '')), type, week, subjectId,
+      detected: track && !detected ? '' : detected, track, refs, forClasses: describeRefs(refs),
+    });
   }
   return out;
+}
+
+// ---------------------------------------------------------------- your class (שכבה + מספר)
+
+export const GRADES = ['ז', 'ח', 'ט', 'י', 'יא', 'יב'];
+const G = '(יא|יב|ז|ח|ט|י)';
+/** י"א → יא, י' → י — strip the marks so grades can be compared. */
+const gnorm = (s) => String(s || '').replace(/([א-ת])["״'׳`]+([א-ת])/g, '$1$2').replace(/["״'׳`]/g, ' ').replace(/\s+/g, ' ');
+export const gradeName = (g) => (g.length === 2 ? `${g[0]}״${g[1]}` : `${g}׳`);
+
+/** "שכבה י'" / "י'3" / "יא 2" / "כיתה ט1" → { grade, num } (num may be ''). */
+export function parseClass(label) {
+  const m = ` ${gnorm(label)} `.match(new RegExp(`(?:^|[^א-ת\\d])ל?${G}\\s?(\\d{1,2})?(?=[^א-ת\\d]|$)`));
+  return m ? { grade: m[1], num: m[2] ? String(+m[2]) : '' } : null;
+}
+
+/** The student's class from the profile (older versions stored "שכבה י׳"). */
+export function myClass() {
+  const p = S.data.profile;
+  let grade = p.grade || '';
+  if (grade && !GRADES.includes(grade)) grade = parseClass(grade)?.grade || '';
+  return { grade, num: p.classNum ? String(+p.classNum) : '' };
+}
+
+export const classLabel = (c = myClass()) => (c.grade ? `${c.grade}${c.num || ''}` : '');
+
+/** Classes an exam cell names: "י1, י3", "י2-י4", "יא 1 ו-3", "לשכבת יב". */
+export function classRefs(text) {
+  const n = ` ${gnorm(text)} `;
+  const classes = new Map(); // grade → Set of class numbers
+  const grades = new Set(); // whole grades
+  const add = (g, k) => {
+    if (!classes.has(g)) classes.set(g, new Set());
+    classes.get(g).add(String(+k));
+  };
+  const tok = new RegExp(`(^|[^א-ת\\d])[ולב]?${G}\\s?(\\d{1,2})(?!\\d)`, 'g');
+  const tail = /^(\s*(?:[-–,]|ו-?)\s*)(\d{1,2})(?!\d)/;
+  let m;
+  let lastEnd = -1;
+  let lastGrade = null;
+  let lastNum = 0;
+  while ((m = tok.exec(n))) {
+    const g = m[2];
+    const k = +m[3];
+    const between = lastEnd >= 0 ? n.slice(lastEnd, m.index + m[1].length) : '';
+    if (lastEnd >= 0 && lastGrade === g && /^\s*[-–]\s*$/.test(between)) for (let j = lastNum + 1; j <= k; j++) add(g, j);
+    else add(g, k);
+    lastEnd = tok.lastIndex;
+    lastGrade = g;
+    lastNum = k;
+    // bare numbers continuing the list: "י1, 3" · "י1-4" · "י2 ו-5"
+    let t;
+    while ((t = n.slice(lastEnd).match(tail))) {
+      const k2 = +t[2];
+      if (/[-–]/.test(t[1]) && !/ו/.test(t[1])) for (let j = lastNum + 1; j <= k2; j++) add(g, j);
+      else add(g, k2);
+      lastNum = k2;
+      lastEnd += t[0].length;
+    }
+    tok.lastIndex = lastEnd;
+  }
+  for (const gm of n.matchAll(new RegExp(`(?:שכבת|שכבה|כיתות|כיתה)\\s+${G}(?![א-ת\\d])`, 'g'))) grades.add(gm[1]);
+  return { classes, grades };
+}
+
+// A grade as written in titles: י, י', י׳, יא, י"א, י״א, יב…
+const GQ = `(?:י["״']?[אב]|[זחטי])['׳]?`;
+/** Drop "י1, י3" / "לכיתות י2-י4" / "(י״א 4)" / "לשכבת יב" from a title (it's shown separately). */
+function stripClasses(t) {
+  const out = String(t)
+    .replace(new RegExp(`(^|[^א-ת\\d])\\(?\\s*(?:[לב]?(?:כיתות|כיתה)\\s+)?[ולב]?${GQ}\\s?\\d{1,2}(?:\\s*(?:[-–,]|ו-?)\\s*(?:[ולב]?${GQ}\\s?)?\\d{1,2})*\\s*\\)?`, 'g'), '$1 ')
+    .replace(new RegExp(`(^|[^א-ת])[לב]?(?:שכבת|שכבה)\\s+${GQ}(?![א-ת\\d])`, 'g'), '$1 ')
+    .replace(/\s+/g, ' ')
+    .replace(/^[\s\-–:,]+|[\s\-–:,]+$/g, '')
+    .trim();
+  return /[א-ת]{2}/.test(out) ? out : String(t).trim();
+}
+
+function describeRefs(refs) {
+  const cls = [];
+  for (const [g, nums] of refs.classes) cls.push(...[...nums].sort((a, b) => a - b).map((k) => `${g}${k}`));
+  const gr = [...refs.grades].filter((g) => !refs.classes.has(g)).map(gradeName);
+  const parts = [];
+  if (cls.length) parts.push(`${cls.length > 1 ? 'לכיתות' : 'לכיתה'} ${cls.join(', ')}`);
+  if (gr.length) parts.push(`לשכבת ${gr.join(', ')}`);
+  return parts.join(' · ');
+}
+
+/** 'yes' — for you · 'no' — for other classes · 'ask' — depends on a class you haven't set. */
+function classFit(refs, me) {
+  if (!refs.classes.size && !refs.grades.size) return 'yes';
+  if (!me.grade) return 'ask';
+  if (refs.classes.has(me.grade)) return me.num ? (refs.classes.get(me.grade).has(me.num) ? 'yes' : 'no') : 'ask';
+  return refs.grades.has(me.grade) ? 'yes' : 'no';
+}
+
+/** The board column for the student's class: exact class, else the whole grade. -1 = can't tell. */
+function pickColumn(columns) {
+  if (columns.length < 2) return 0;
+  const me = myClass();
+  if (!me.grade) return -1;
+  const parsed = columns.map((c) => parseClass(c.label));
+  let i = parsed.findIndex((p) => p && p.grade === me.grade && me.num && p.num === me.num);
+  if (i === -1) i = parsed.findIndex((p) => p && p.grade === me.grade && !p.num);
+  if (i === -1) i = parsed.findIndex((p) => p && p.grade === me.grade);
+  return i;
+}
+
+/** Subjects that count as "yours": the ones in your timetable (else your subject list). */
+function timetableSubjects() {
+  const ids = new Set(S.data.lessons.map((l) => l.subjectId).filter(Boolean));
+  return { ids: ids.size ? ids : new Set(S.data.subjects.map((s) => s.id)), fromTimetable: ids.size > 0 };
 }
 
 // ---------------------------------------------------------------- import UI
 
 function buildRows(column) {
   const today = isoDate();
+  const me = myClass();
+  const mine = timetableSubjects().ids;
   const rows = [];
   for (const ev of column.events) {
     for (const a of understand(ev.text)) {
@@ -340,19 +458,31 @@ function buildRows(column) {
         (e) => e.date === ev.date && ((a.subjectId && e.subjectId === a.subjectId) || nk(e.title) === nk(a.title))
       );
       const past = ev.date < today && daysUntil(ev.date) < (a.week ? -6 : 0);
-      const group = exists || past ? 'done' : a.subjectId ? 'mine' : a.detected ? 'other' : 'unknown';
-      rows.push({ ...a, date: ev.date, exists, past, group, on: group === 'mine', pick: a.subjectId || (a.detected ? `new:${a.detected}` : '') });
+      const fit = classFit(a.refs, me);
+      const group =
+        exists || past ? 'done'
+        : fit === 'no' ? 'notclass'
+        : fit === 'ask' ? 'unknown'
+        : a.subjectId && mine.has(a.subjectId) ? 'mine'
+        : a.subjectId || a.detected ? 'other'
+        : 'unknown';
+      rows.push({ ...a, date: ev.date, exists, past, fit, group, on: group === 'mine', pick: a.subjectId || (a.detected ? `new:${a.detected}` : '') });
     }
   }
   return rows;
 }
 
-const GROUPS = [
-  ['mine', 'במקצועות שלך', ''],
-  ['unknown', 'לא ברור לאיזה מקצוע', 'למשל מבחני מגמות. בוחרים את המקצוע, והמבחן יסומן להוספה.'],
-  ['other', 'מקצועות שאין לך', 'אם בכל זאת לומדים את זה, מסמנים ונוסף גם המקצוע.'],
-  ['done', 'כבר עברו או כבר ברשימה', ''],
-];
+function groups() {
+  const tt = timetableSubjects().fromTimetable;
+  return [
+    ['mine', tt ? 'במקצועות שבמערכת שלך' : 'במקצועות שלך', ''],
+    ['unknown', 'צריך לבחור', 'מבחני מגמות, או מבחן לכיתות מסוימות: בוחרים מקצוע (או את הכיתה שלך למעלה) ומסמנים.'],
+    ['other', tt ? 'לא במערכת השעות שלך' : 'מקצועות שאין לך', 'אם בכל זאת לומדים את זה, מסמנים.'],
+    ['notclass', 'לכיתות אחרות', ''],
+    ['done', 'כבר עברו או כבר ברשימה', ''],
+  ];
+}
+const COLLAPSED = ['notclass', 'done'];
 
 function subjectSelect(r, i) {
   const opts = [`<option value="">בלי מקצוע</option>`];
@@ -373,35 +503,63 @@ function rowHTML(r, i) {
     <span class="board-date"><b>${d.getDate()}</b><small>${MONTH.format(d)}</small></span>
     <span class="grow">
       <span class="board-title">${esc(r.title)}</span>
-      <span class="sr-sub">${esc(r.type)}${r.week ? ' · במהלך השבוע' : ''}${r.exists ? ' · כבר ברשימה' : r.past ? ' · עבר' : ''}</span>
+      <span class="sr-sub">${esc(r.type)}${r.week ? ' · במהלך השבוע' : ''}${r.forClasses ? ` · <b class="${r.fit === 'yes' ? 'fit-yes' : r.fit === 'no' ? 'fit-no' : ''}">${esc(r.forClasses)}</b>` : ''}${r.exists ? ' · כבר ברשימה' : r.past ? ' · עבר' : ''}</span>
       ${subjectSelect(r, i)}
     </span>
   </div>`;
 }
 
+/** Grade + class-number selects (used here and in Settings). */
+export function classSelects(where = 'board') {
+  const me = myClass();
+  const attr = (k) => (where === 'settings' ? `data-setting="profile.${k === 'num' ? 'classNum' : 'grade'}"` : `data-me="${k}"`);
+  const nums = Array.from({ length: 15 }, (_, i) => String(i + 1));
+  return `<select class="row-select" ${attr('grade')} aria-label="שכבה"><option value="">שכבה</option>${GRADES.map(
+    (g) => `<option value="${g}"${g === me.grade ? ' selected' : ''}>${gradeName(g)}</option>`
+  ).join('')}</select>
+  <select class="row-select" ${attr('num')} aria-label="מספר כיתה"><option value="">מס׳</option>${nums
+    .map((k) => `<option value="${k}"${k === me.num ? ' selected' : ''}>${k}</option>`)
+    .join('')}</select>`;
+}
+
 function bodyHTML(state) {
   const col = state.columns[state.col];
   const rows = state.rows;
+  const me = myClass();
+  const asks = rows.some((r) => r.fit === 'ask' && r.group !== 'done');
+  const picker = `<div class="card class-pick${!me.grade || asks ? ' attn' : ''}">
+      <span class="grow"><b>הכיתה שלי</b><span class="sr-sub">${
+        !me.grade
+          ? 'כדי שמבחנים של כיתות אחרות לא ייכנסו'
+          : asks && !me.num
+          ? 'יש מבחנים לכיתות מסוימות — בחר/י גם מספר כיתה'
+          : 'מבחנים של כיתות אחרות לא ייכנסו'
+      }</span></span>
+      ${classSelects()}
+    </div>`;
   const chips =
     state.columns.length > 1
-      ? `<p class="small"><b>באיזו שכבה / כיתה את/ה?</b></p>
+      ? `<p class="small"><b>${state.col === -1 ? 'איזו עמודה בלוח שלך?' : 'עמודה בלוח'}</b></p>
          <div class="chip-wrap">${state.columns
            .map((c, i) => `<button class="chip-btn${i === state.col ? ' on' : ''}" data-col="${i}">${esc(c.label || `טבלה ${i + 1}`)}</button>`)
            .join('')}</div>`
-      : col.label
+      : col?.label
       ? `<p class="muted small">${esc(col.label)}</p>`
       : '';
-  const groups = GROUPS.map(([g, title, hint]) => {
-    const idx = rows.map((r, i) => (r.group === g ? i : -1)).filter((i) => i !== -1);
-    if (!idx.length) return '';
-    const inner = `${hint ? `<p class="muted small">${hint}</p>` : ''}<div class="card list board-list">${idx.map((i) => rowHTML(rows[i], i)).join('')}</div>`;
-    return g === 'done'
-      ? `<details class="board-group"><summary>${title} (${idx.length})</summary>${inner}</details>`
-      : `<div class="board-group"><h4 class="group-title">${title} (${idx.length})</h4>${inner}</div>`;
-  }).join('');
+  if (state.col === -1) return `${picker}${chips}<p class="muted small center">בוחרים את הכיתה שלך או עמודה, ואז יופיעו המבחנים.</p>`;
+  const html = groups()
+    .map(([g, title, hint]) => {
+      const idx = rows.map((r, i) => (r.group === g ? i : -1)).filter((i) => i !== -1);
+      if (!idx.length) return '';
+      const inner = `${hint ? `<p class="muted small">${hint}</p>` : ''}<div class="card list board-list">${idx.map((i) => rowHTML(rows[i], i)).join('')}</div>`;
+      return COLLAPSED.includes(g)
+        ? `<details class="board-group" data-g="${g}"${state.open?.has(g) ? ' open' : ''}><summary>${title} (${idx.length})</summary>${inner}</details>`
+        : `<div class="board-group"><h4 class="group-title">${title} (${idx.length})</h4>${inner}</div>`;
+    })
+    .join('');
   const n = rows.filter((r) => r.on).length;
-  return `${chips}
-    ${rows.length ? groups : `<p class="muted center">לא מצאתי מבחנים בטבלה הזו.</p>`}
+  return `${picker}${chips}
+    ${rows.length ? html : `<p class="muted center">לא מצאתי מבחנים בטבלה הזו.</p>`}
     <button class="btn primary block board-go" data-board-go ${n ? '' : 'disabled'}>${addLabel(n)}</button>`;
 }
 
@@ -413,14 +571,12 @@ function saveRows(state) {
     if (S.data.exams.some((e) => e.date === r.date && ((subjectId && e.subjectId === subjectId && e.type === r.type) || nk(e.title) === nk(r.title)))) continue;
     S.data.exams.push({
       id: uid(), subjectId, title: r.title, type: r.type, date: r.date, time: '', topics: [], grade: '',
-      notes: r.week ? `מתישהו במהלך השבוע שמתחיל ב-${fmtDate(r.date)}` : '',
+      notes: [r.week ? `מתישהו במהלך השבוע שמתחיל ב-${fmtDate(r.date)}` : '', r.forClasses].filter(Boolean).join('\n'),
       ...(r.week ? { week: true } : {}),
       source: 'board', createdAt: Date.now(),
     });
     added++;
   }
-  const label = state.columns[state.col]?.label;
-  if (label) S.data.profile.grade = label;
   save();
   return added;
 }
@@ -454,10 +610,17 @@ export async function importExamBoard(file, preParsed = null) {
     );
     return;
   }
-  // Pre-select the grade the student picked last time.
-  const saved = S.data.profile.grade;
-  const state = { columns: res.columns, col: Math.max(0, res.columns.findIndex((c) => c.label && c.label === saved)), rows: [] };
-  state.rows = buildRows(state.columns[state.col]);
+  // A board for one grade ("שכבה י'") tells us your grade, if you haven't set it yet.
+  if (!myClass().grade && res.columns.length === 1) {
+    const p = parseClass(res.columns[0].label);
+    if (p) {
+      S.data.profile.grade = p.grade;
+      save();
+    }
+  }
+  // The column for the student's class (asks when the board has several and it can't tell).
+  const state = { columns: res.columns, col: pickColumn(res.columns), rows: [], open: new Set() };
+  state.rows = state.col === -1 ? [] : buildRows(state.columns[state.col]);
   setTimeout(
     () =>
       openSheet(
@@ -468,18 +631,32 @@ export async function importExamBoard(file, preParsed = null) {
           onMount(sheet, close) {
             const body = sheet.querySelector('.board-body');
             const redraw = () => {
-              const open = [...body.querySelectorAll('details[open]')].length > 0;
+              state.open = new Set([...body.querySelectorAll('details[open]')].map((d) => d.dataset.g));
               body.innerHTML = bodyHTML(state);
-              if (open) body.querySelector('details')?.setAttribute('open', '');
+            };
+            const rebuild = () => {
+              state.rows = state.col === -1 ? [] : buildRows(state.columns[state.col]);
+              redraw();
             };
             const updateBtn = () => {
               const n = state.rows.filter((r) => r.on).length;
               const b = body.querySelector('[data-board-go]');
+              if (!b) return;
               b.disabled = !n;
               b.textContent = addLabel(n);
             };
             body.addEventListener('change', (ev) => {
               const el = ev.target;
+              if (el.dataset.me) {
+                // Your class changed: remember it, re-pick the column, re-sort the exams.
+                if (el.dataset.me === 'grade') S.data.profile.grade = el.value;
+                else S.data.profile.classNum = el.value;
+                save();
+                const c = pickColumn(state.columns);
+                if (c !== -1) state.col = c;
+                rebuild();
+                return;
+              }
               if (el.dataset.i == null) return;
               const r = state.rows[+el.dataset.i];
               if (el.dataset.f === 'on') r.on = el.checked;
@@ -498,8 +675,14 @@ export async function importExamBoard(file, preParsed = null) {
               const chip = ev.target.closest('[data-col]');
               if (chip) {
                 state.col = +chip.dataset.col;
-                state.rows = buildRows(state.columns[state.col]);
-                redraw();
+                // A column named for a grade / class tells us yours.
+                const p = parseClass(state.columns[state.col].label);
+                if (p) {
+                  S.data.profile.grade = p.grade;
+                  if (p.num) S.data.profile.classNum = p.num;
+                  save();
+                }
+                rebuild();
                 return;
               }
               if (ev.target.closest('[data-board-go]')) {

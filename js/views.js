@@ -22,7 +22,7 @@ import { decksList } from './flashcards.js';
 import { filesGrid, attachBar, filesSummary } from './files.js';
 import { notebooksGrid } from './notebooks.js';
 import { recoverCard } from './recover.js';
-import { boardButton } from './examBoard.js';
+import { boardButton, classSelects, classLabel } from './examBoard.js';
 
 // ---------- shared bits ----------
 
@@ -669,12 +669,13 @@ export function more() {
       <span class="avatar" aria-hidden="true">${esc(initial)}</span>
       <span class="grow">
         <input class="profile-name" data-setting="profile.name" value="${esc(d.profile.name)}" placeholder="השם שלך" autocomplete="given-name" aria-label="שם">
-        <span class="sr-sub">${d.subjects.length} מקצועות · ${d.exams.length} מבחנים · ${d.items.length} פריטי חומר</span>
+        <span class="sr-sub">${classLabel() ? `כיתה ${esc(classLabel())} · ` : ''}${d.subjects.length} מקצועות · ${d.exams.length} מבחנים · ${d.items.length} פריטי חומר</span>
       </span>
     </div>
 
     <h3 class="group-title">למידה</h3>
     <div class="card list">
+      <div class="row-btn class-row">${tile('grad', 'indigo')}<span class="grow">הכיתה שלי<span class="sr-sub">ללוח המבחנים: רק מה ששייך לכיתה שלך</span></span>${classSelects('settings')}</div>
       <label class="row-btn">${tile('target', 'red')}<span class="grow">מטרה שבועית</span>
         <input class="row-input" type="number" inputmode="numeric" min="1" max="80" data-setting="settings.weeklyGoalH" value="${esc(d.settings.weeklyGoalH)}" aria-label="מטרה שבועית בשעות"><span class="row-val">שעות</span></label>
       <label class="row-btn">${tile('timer', 'orange')}<span class="grow">אורך פומודורו</span>
