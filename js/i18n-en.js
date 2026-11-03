@@ -277,6 +277,7 @@ const D = {
   'במחשב: גוררים את הכפתור הזה לסרגל הסימניות —': 'On a computer: drag this button to the bookmarks bar —',
   'הכי קל:': 'Easiest:', 'הכי קל': 'Easiest', 'הסימנייה "ייבוא" בספארי': 'the "Import" bookmark in Safari',
   'מעתיקה את הדף בלחיצה אחת. או ידנית: בוובטופ פותחים את': 'copies the page in one tap. Or by hand: in Webtop open',
+  'אין משהו קרוב 🎉': 'Nothing coming up 🎉', 'אין משהו קרוב': 'Nothing coming up', 'חדר': 'Room',
   'חזרה': 'Back', 'מצב': 'Status', 'לחיצה משנה': 'tap to change', 'הכי גבוה': 'Highest', 'שבוע': 'Week',
 };
 
@@ -343,6 +344,10 @@ export const EN_PATTERNS = [
   ['מוצגים (\\d+) מתוך (\\d+) עמודים', 'Showing $1 of $2 pages'],
   ['עודכן (.+)', 'Updated $1'],
   ['מהדף: (.+)', 'From the page: $1'],
+  ['(\\d+) שיעורים היום', '$1 lessons today'],
+  ['(\\d+) (?:משימות|משימה) להגשה עד מחר', (n) => `${n} due by tomorrow`],
+  ['השיעור הבא: (.+)', 'Next lesson: $1'],
+  ['חדר (.+)', 'Room $1'],
   ['שומר (סרטון|קובץ) \\((.+)\\)…', (k, s) => `Saving ${k === 'סרטון' ? 'video' : 'file'} (${s})…`],
 
   ['(.+) היום', '$1 today'],

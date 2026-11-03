@@ -25,6 +25,8 @@ import { filesGrid, attachBar, filesSummary } from './files.js';
 import { notebooksGrid } from './notebooks.js';
 import { recoverCard } from './recover.js';
 import { boardButton, classSelects, classLabel } from './examBoard.js';
+import { classCardsRow, subjectBanner, homeHero } from './classcards.js';
+import { lessonsOn } from './schedule.js';
 
 // ---------- shared bits ----------
 
@@ -177,11 +179,21 @@ export function home() {
     <button class="quick-btn" data-go="#study">${tile('timer', 'purple')}ללמוד</button>
   </div>`;
 
+  // What today looks like, as chips on the welcome banner.
+  const todayN = lessonsOn(now.getDay()).length;
+  const nextEx = upcomingExams()[0];
+  const dueSoon = openTasks().filter((t) => t.due && daysUntil(t.due) <= 1).length;
+  const chips = [
+    todayN ? `${ICON.calendar}<span>${todayN} שיעורים היום</span>` : '',
+    nextEx ? `${ICON.exam}<span>${esc(subjectName(nextEx.subjectId))} · ${relDay(nextEx.date)}</span>` : '',
+    dueSoon ? `${ICON.tasks}<span>${dueSoon} ${dueSoon === 1 ? 'משימה' : 'משימות'} להגשה עד מחר</span>` : '',
+  ].filter(Boolean);
   return `
-    ${head(`${greeting(now)}${name}`, {
+    ${head('', {
+      navTitle: `${greeting(now)}${name}`,
       actions: `${iconBtn('go-search', ICON.search, 'חיפוש')}${iconBtn('go-more', ICON.gear, 'הגדרות')}`,
-      sub: `${fmtDateLong(now)}${heb ? ` · ${heb}` : ''}`,
     })}
+    ${homeHero({ title: `${greeting(now)}${name}`, date: `${fmtDateLong(now)}${heb ? ` · ${heb}` : ''}`, chips })}
     ${loadFailedCard()}
     ${recoverCard()}
     ${installCard()}
@@ -205,7 +217,7 @@ export function home() {
     ${d.lessons.length ? '' : `<div class="card list"><button class="row-btn" data-go="#schedule">${tile('calendar', 'teal')}<span class="grow">מערכת שעות<span class="sr-sub">להוסיף ידנית או לייבא מ-PDF</span></span><span class="chev">${ICON.fwd}</span></button></div>`}
     ${
       d.subjects.length
-        ? section('המקצועות שלי', `<div class="chip-scroll">${d.subjects.map((s) => subjectChip(s)).join('')}<button class="chip-btn add" data-act="add-subject" aria-label="הוספת מקצוע">${ICON.plus}</button></div>`)
+        ? section('המקצועות שלי', classCardsRow())
         : ''
     }
   `;
@@ -679,22 +691,23 @@ export function subjectDetail(id) {
   const ts = openTasks().filter((t) => t.subjectId === id);
   const its = S.data.items.filter((i) => i.subjectId === id).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).slice(0, 6);
   return `
-    ${head(s.name, {
+    ${head('', {
       back: '#home',
+      navTitle: s.name,
       actions: iconBtn('edit-subject', ICON.edit, 'עריכת מקצוע', `data-id="${id}"`),
-      sub: `<span class="dot lg" style="background:var(--c${s.color % 8})"></span>${s.classroomId ? ' מחובר ל-Classroom' : ''}`,
     })}
+    ${subjectBanner(s)}
     <div class="card stat-tiles three">
       <div class="stat"><span class="stat-label">השבוע</span>${statVal(weekMin)}</div>
       <div class="stat"><span class="stat-label">סה״כ</span>${statVal(totalMin)}</div>
       <button class="stat stat-link" data-go="#grades-${id}"><span class="stat-label">ממוצע ›</span><span class="stat-value">${avg ?? '—'}</span></button>
     </div>
-    <button class="card row-btn nb-link" data-go="#notebook-${id}">📓<span class="grow"><b>המחברת של ${esc(s.name)}</b><br><span class="muted small">דפי מחברת, סיכומים, קבצים וכרטיסיות</span></span><span class="chev">${ICON.fwd}</span></button>
+    <button class="card row-btn nb-link" data-go="#notebook-${id}"><span class="nb-mini" style="--nb:var(--c${s.color % 8})" aria-hidden="true"><span class="nb-rings"></span></span><span class="grow"><b>המחברת של ${esc(s.name)}</b><br><span class="muted small">דפי מחברת, סיכומים, קבצים וכרטיסיות</span></span><span class="chev">${ICON.fwd}</span></button>
     <div class="quick">
-      <button class="quick-btn" data-act="add-exam" data-subject="${id}"><span>${ICON.exam}</span>מבחן</button>
-      <button class="quick-btn" data-act="add-task" data-subject="${id}"><span>${ICON.tasks}</span>משימה</button>
-      <button class="quick-btn" data-act="new-note" data-subject="${id}"><span>${ICON.note}</span>סיכום</button>
-      <button class="quick-btn" data-act="subject-study" data-id="${id}"><span>${ICON.timer}</span>ללמוד</button>
+      <button class="quick-btn" data-act="add-exam" data-subject="${id}">${tile('exam', 'red')}מבחן</button>
+      <button class="quick-btn" data-act="add-task" data-subject="${id}">${tile('tasks', 'orange')}משימה</button>
+      <button class="quick-btn" data-act="new-note" data-subject="${id}">${tile('note', 'green')}סיכום</button>
+      <button class="quick-btn" data-act="subject-study" data-id="${id}">${tile('timer', 'purple')}ללמוד</button>
     </div>
     ${section('מבחנים קרובים', ex.length ? `<div class="stack">${ex.map(examCard).join('')}</div>` : empty('🎉', 'אין מבחנים קרובים במקצוע הזה'))}
     ${section('משימות פתוחות', ts.length ? `<div class="card list">${ts.map(taskRow).join('')}</div>` : empty('✅', 'אין משימות פתוחות'))}

@@ -11,10 +11,14 @@ export function head(title, { back, actions = '', sub = '', navTitle } = {}) {
       <div class="head-actions">${actions || '<span class="nav-sp"></span>'}</div>
     </div>
   </div>
-  <header class="page-head">
+  ${
+    title || sub
+      ? `<header class="page-head">
     <h1 class="large-title">${esc(title)}</h1>
     ${sub ? `<p class="subtitle">${sub}</p>` : ''}
-  </header>`;
+  </header>`
+      : '' /* the screen shows its own title (banner / editor) */
+  }`;
 }
 
 export const iconBtn = (act, icon, label, data = '') =>

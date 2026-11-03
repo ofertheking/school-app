@@ -28,6 +28,7 @@ import * as Board from './examBoard.js';
 import * as Grades from './grades.js';
 import * as Notes from './notes.js';
 import * as Bridge from './bridge.js';
+import * as Motion from './motion.js';
 import { applyAppearance } from './appearance.js';
 import { startTranslating, setLang } from './i18n.js';
 import { ICON } from './icons.js';
@@ -103,36 +104,50 @@ function render() {
       search: Search.searchPage,
     }[name] || V.home;
   if (currentRoute === 'review' && r !== 'review') Cards.onLeaveReview();
-  view.innerHTML = html();
-  const tab = TAB_OF[name] || 'home';
-  document.querySelectorAll('.tab').forEach((b) => {
-    const on = b.dataset.tab === tab;
-    b.classList.toggle('on', on);
-    on ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current');
-  });
-  view.querySelectorAll('textarea.autosize').forEach(autosize);
-  hydrateFiles(view);
-  watchLargeTitle();
-  // Play the staggered entrance animation on a screen change — not on in-place
-  // re-renders (toggling a task, cycling a topic, …), which keep the same route.
-  if (r !== currentRoute) {
-    view.classList.remove('anim');
-    void view.offsetWidth; // restart the CSS animation
-    view.classList.add('anim');
-    clearTimeout(render._animT);
-    // Drop the class once the entrance finishes, so later in-place re-renders
-    // (e.g. flipping a flashcard) don't replay it on freshly created elements.
-    render._animT = setTimeout(() => view.classList.remove('anim'), 650);
+  const changed = r !== currentRoute;
+  const dir = changed ? Motion.directionFor(r, currentRoute) : 'none';
+  const slide = Motion.canSlide(dir);
+  if (changed) currentRoute = r;
+  const update = () => {
+    view.innerHTML = html();
+    const tab = TAB_OF[name] || 'home';
+    document.querySelectorAll('.tab').forEach((b) => {
+      const on = b.dataset.tab === tab;
+      b.classList.toggle('on', on);
+      on ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current');
+    });
+    view.querySelectorAll('textarea.autosize').forEach(autosize);
+    hydrateFiles(view);
+    watchLargeTitle();
+    Motion.moveTabIndicator();
+    if (!changed) return; // in-place re-renders (ticking a task…) don't animate
+    // Pushing / popping a screen slides it (view transition); switching tabs or
+    // the first paint plays the staggered entrance instead.
+    if (!slide) {
+      view.classList.remove('anim');
+      void view.offsetWidth; // restart the CSS animation
+      view.classList.add('anim');
+      clearTimeout(render._animT);
+      // Drop the class once the entrance finishes, so later in-place re-renders
+      // (e.g. flipping a flashcard) don't replay it on freshly created elements.
+      render._animT = setTimeout(() => view.classList.remove('anim'), 650);
+    }
     window.scrollTo(0, 0);
     document.body.classList.remove('nav-compact');
-    currentRoute = r;
-  }
+    // Rings, bars and charts fill in only when a screen opens.
+    view.classList.add('entering');
+    clearTimeout(render._enterT);
+    render._enterT = setTimeout(() => view.classList.remove('entering'), 1400);
+    Motion.countUp(view);
+  };
+  if (changed) Motion.swap(update, dir);
+  else update();
 }
 
 let titleObserver = null;
 function watchLargeTitle() {
   titleObserver?.disconnect();
-  const t = view.querySelector('.large-title');
+  const t = [...view.querySelectorAll('.large-title')].find((x) => x.textContent.trim());
   if (!t || !t.textContent.trim() || !('IntersectionObserver' in window)) {
     document.body.classList.toggle('nav-compact', !!view.querySelector('.editor') && window.scrollY > 10);
     return;
@@ -838,8 +853,9 @@ const ACTIONS = {
     render();
   },
   'exam-cal': ({ id }) => calendarSheet(exam(id)),
-  'exam-done'({ id }) {
+  'exam-done'({ id }, el) {
     const e = exam(id);
+    if (!e.done) Motion.burstFrom(el);
     e.done = !e.done;
     if (e.done && !e.doneAt) e.doneAt = Date.now();
     save();
@@ -865,8 +881,9 @@ const ACTIONS = {
   'new-lesson-note': ({ subject: sid, date }) => newLessonNote(sid, date || isoDate()),
   'lesson-note-form': ({ subject: sid }) => lessonNoteForm(sid),
   'edit-task': ({ id }) => taskForm(task(id)),
-  'task-toggle'({ id }) {
+  'task-toggle'({ id }, el) {
     const t = task(id);
+    if (!t.done) Motion.burstFrom(el);
     t.done = !t.done;
     t.doneAt = t.done ? Date.now() : null;
     save();
@@ -1110,7 +1127,9 @@ document.addEventListener('click', (e) => {
   const inner = e.target.closest('[data-act]');
   if (go && !(inner && go.contains(inner) && inner !== go)) {
     e.preventDefault();
-    navigate(go.dataset.go);
+    if (go.classList.contains('back')) Motion.hint('back');
+    if (go.classList.contains('nb-card')) Motion.openNotebook(go, () => navigate(go.dataset.go));
+    else navigate(go.dataset.go);
     return;
   }
   const a = e.target.closest('[data-act]');
@@ -1319,6 +1338,8 @@ hooks.navigate = navigate;
 
 async function boot() {
   startTranslating(); // English: translate the static shell and everything rendered from now on
+  Motion.enableEdgeSwipe(view);
+  addEventListener('resize', () => Motion.moveTabIndicator());
   await initStore();
   await load();
   if (S.loadFailed) {
