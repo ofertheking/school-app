@@ -155,7 +155,16 @@ export function schedulePage() {
   ).join('');
   const w = S.data.settings.webtop;
   return `
-    ${head('מערכת שעות', { back: '#home', actions: `${pdfButton('icon-btn pdf-btn', '<b>PDF</b>')}${iconBtn('add-lesson', ICON.plus, 'הוספת שיעור')}` })}
+    ${head('מערכת שעות', {
+      back: '#home',
+      actions: `${pdfButton('icon-btn pdf-btn', '<b>PDF</b>')}${iconBtn('add-lesson', ICON.plus, 'הוספת שיעור')}`,
+      hero: {
+        color: 'teal',
+        chips: S.data.lessons.length
+          ? [`${ICON.calendar}<span>${S.data.lessons.length} שיעורים בשבוע</span>`, `<span>היום ${lessonsOn(today).length} שיעורים</span>`]
+          : [],
+      },
+    })}
     <div class="day-chips" role="group" aria-label="יום">${chips}</div>
     <h2 class="day-title">יום ${DAY_NAMES[day]}</h2>
     ${

@@ -27,6 +27,8 @@ import { recoverCard } from './recover.js';
 import { boardButton, classSelects, classLabel } from './examBoard.js';
 import { classCardsRow, subjectBanner, homeHero } from './classcards.js';
 import { lessonsOn } from './schedule.js';
+import { planSection, todayPlanCard } from './plan.js';
+import { achievementsSection } from './achievements.js';
 
 // ---------- shared bits ----------
 
@@ -202,6 +204,7 @@ export function home() {
     ${studyCard}
     ${quick}
     ${todaySection()}
+    ${todayPlanCard()}
     ${gradesHomeCard()}
     ${section(
       'מבחנים קרובים',
@@ -238,11 +241,22 @@ export function exams() {
       : `<div class="card">${empty('📅', 'אין מבחנים קרובים. אפשר להוסיף מבחן, או לייבא את לוח המבחנים של בית הספר מקובץ PDF.', `<div class="row gap center-row">${boardButton('btn primary', `${ICON.clip} ייבוא לוח מבחנים`)}<button class="btn tinted" data-act="add-exam">${ICON.plus} הוספת מבחן</button></div>`)}</div>`;
   }
   return `
-    ${head('מבחנים', { actions: `${boardButton('icon-btn pdf-btn', '<b>PDF</b>')}${iconBtn('add-exam', ICON.plus, 'הוספת מבחן')}` })}
+    ${head('מבחנים', { actions: `${boardButton('icon-btn pdf-btn', '<b>PDF</b>')}${iconBtn('add-exam', ICON.plus, 'הוספת מבחן')}`, hero: { color: 'red', chips: examChips() } })}
     ${segCtl}
     ${body}
     ${S.ui.examsSeg === 'upcoming' && upcomingExams().length ? `<p class="muted small center">יש לך את לוח המבחנים כ-PDF? ${boardButton('link-btn inline', 'ייבוא מלוח מבחנים')}</p>` : ''}
   `;
+}
+
+function examChips() {
+  const up = upcomingExams();
+  const next = up[0];
+  const done = pastExams().length;
+  return [
+    `${ICON.exam}<span>${up.length} קרובים</span>`,
+    next ? `${ICON.calendar}<span>${esc(subjectName(next.subjectId))} · ${relDay(next.date)}</span>` : '',
+    done ? `${ICON.check}<span>${done} הוגשו</span>` : '',
+  ];
 }
 
 const MONTH_YEAR = new Intl.DateTimeFormat(LOCALE, { month: 'long', year: 'numeric' });
@@ -360,12 +374,20 @@ export function examDetail(id) {
     ${head(e.title || e.type || 'מבחן', {
       back: '#exams',
       actions: iconBtn('edit-exam', ICON.edit, 'עריכה', `data-id="${e.id}"`),
-      sub: `${dot(e.subjectId)} ${esc(subjectName(e.subjectId))} · ${esc(e.type || 'מבחן')} · ${e.week ? `במהלך השבוע של ${fmtDate(e.date)}` : fmtDate(e.date)}${e.time ? ` · <bdi>${esc(e.time)}</bdi>` : ''}`,
+      sub: `${esc(subjectName(e.subjectId))} · ${esc(e.type || 'מבחן')}`,
+      hero: {
+        nb: subjectColor(e.subjectId),
+        chips: [
+          `${ICON.calendar}<span>${e.week ? `במהלך השבוע של ${fmtDate(e.date)}` : fmtDate(e.date)}${e.time ? ` · <bdi>${esc(e.time)}</bdi>` : ''}</span>`,
+          (e.topics || []).length ? `${ICON.check}<span>${(e.topics || []).filter((x) => x.s === 2).length}/${e.topics.length} נושאים בשליטה</span>` : '',
+        ],
+      },
     })}
     <div class="card countdown ${n >= 0 ? examUrgency(e) : 'past'}">${big}</div>
 
     ${past ? paper : ''}
     ${material}
+    ${planSection(e)}
 
     ${section(
       'למידה למבחן',
@@ -444,7 +466,14 @@ export function taskDetail(id) {
     ${head(t.title || 'משימה', {
       back: '#tasks',
       actions: iconBtn('edit-task', ICON.edit, 'עריכה', `data-id="${t.id}"`),
-      sub: `${dot(t.subjectId)} ${esc(subjectName(t.subjectId))}${t.due ? ` · עד ${fmtDate(t.due)}` : ''}`,
+      sub: esc(subjectName(t.subjectId)),
+      hero: {
+        nb: subjectColor(t.subjectId),
+        chips: [
+          t.due ? `${ICON.calendar}<span>עד ${fmtDate(t.due)}</span>` : '',
+          (t.materialFiles || []).length + (t.workFiles || []).length ? `${ICON.clip}<span>${(t.materialFiles || []).length + (t.workFiles || []).length} קבצים</span>` : '',
+        ],
+      },
     })}
     ${hero}
     <button class="card task-status${t.done ? ' on' : ''}" data-act="task-toggle" data-id="${t.id}">
@@ -484,18 +513,40 @@ export function tasks() {
     body = list.length ? `<div class="card list">${list.map(taskRow).join('')}</div>` : empty('📭', 'עוד לא סימנת משימות כבוצעו');
   }
   return `
-    ${head('משימות', { actions: iconBtn('add-task', ICON.plus, 'משימה חדשה') })}
+    ${head('משימות', { actions: iconBtn('add-task', ICON.plus, 'משימה חדשה'), hero: { color: 'orange', chips: taskChips() } })}
     ${seg('tasksSeg', [['open', 'פתוחות'], ['done', 'בוצעו']])}
     ${body}
   `;
 }
 
+function taskChips() {
+  const open = openTasks();
+  const late = open.filter((t) => t.due && daysUntil(t.due) < 0).length;
+  const today = open.filter((t) => t.due && daysUntil(t.due) === 0).length;
+  return [
+    `${ICON.tasks}<span>${open.length} פתוחות</span>`,
+    today ? `${ICON.calendar}<span>${today} להיום</span>` : '',
+    late ? `<span>⚠︎ ${late} באיחור</span>` : '',
+  ];
+}
+
 // ---------- STUDY ----------
+
+function studyChips() {
+  const today = fmtMinShort(todayMinutes());
+  const week = fmtMinShort(weekDays(0).reduce((a, x) => a + x.minutes, 0));
+  const st = streak();
+  return [
+    `${ICON.timer}<span>היום ${today.value} ${today.unit}</span>`,
+    `${ICON.chart}<span>השבוע ${week.value} ${week.unit}</span>`,
+    st ? `${ICON.flame}<span>רצף ${st} ${st === 1 ? 'יום' : 'ימים'}</span>` : '',
+  ];
+}
 
 export function study() {
   const segCtl = seg('studySeg', [['timer', 'טיימר ושעות'], ['cards', 'כרטיסיות']]);
   if (S.ui.studySeg === 'cards') {
-    return `${head('למידה')}${segCtl}${decksList()}`;
+    return `${head('למידה', { hero: { color: 'purple', chips: studyChips() } })}${segCtl}${decksList()}`;
   }
   const t = S.data.timer;
   const subs = S.data.subjects;
@@ -537,7 +588,7 @@ export function study() {
   const recent = [...S.data.sessions].sort((a, b) => b.start - a.start).slice(0, 12);
 
   return `
-    ${head('למידה', { actions: iconBtn('add-session', ICON.plus, 'הוספת זמן ידנית') })}
+    ${head('למידה', { actions: iconBtn('add-session', ICON.plus, 'הוספת זמן ידנית'), hero: { color: 'purple', chips: studyChips() } })}
     ${segCtl}
     ${timerCard}
     ${section(
@@ -566,6 +617,7 @@ export function study() {
             .join('')}</div>`
         : empty('⏱️', 'עוד לא נרשם זמן למידה. לוחצים על "התחלת למידה" או מוסיפים ידנית.')
     )}
+    ${achievementsSection()}
   `;
 }
 
@@ -606,23 +658,35 @@ export function libraryList() {
     .join('')}</div>`;
 }
 
+function libChips() {
+  const items = S.data.items;
+  const summaries = items.filter((i) => ['note', 'lesson'].includes(itemKind(i))).length;
+  const pages = items.filter((i) => i.notebook).reduce((a, i) => a + (i.files || []).length, 0);
+  return [
+    `${ICON.book}<span>${S.data.subjects.length} מחברות</span>`,
+    summaries ? `${ICON.note}<span>${summaries} סיכומים</span>` : '',
+    pages ? `${ICON.camera}<span>${pages} דפים</span>` : '',
+    S.data.notes.length ? `${ICON.edit}<span>${S.data.notes.length} פתקים</span>` : '',
+  ];
+}
+
 export function library() {
   const kinds = [['all', 'הכל'], ['note', 'סיכומים'], ['lesson', 'סיכומי שיעור'], ['notebook', 'דפי מחברת'], ['file', 'קבצים ותמונות'], ['link', 'קישורים']];
   const viewSeg = seg('libView', [['notebooks', 'מחברות'], ['notes', 'פתקים'], ['all', 'כל החומר']]);
   if (S.ui.libView === 'notes') {
     return `
-      ${head('חומר וסיכומים', { actions: iconBtn('note-new', ICON.plus, 'פתק חדש') })}
+      ${head('חומר וסיכומים', { actions: iconBtn('note-new', ICON.plus, 'פתק חדש'), hero: { color: 'green', chips: libChips() } })}
       ${viewSeg}
       ${notesBody()}`;
   }
   if (S.ui.libView !== 'all') {
     return `
-      ${head('חומר וסיכומים', { actions: iconBtn('add-item', ICON.plus, 'הוספת חומר') })}
+      ${head('חומר וסיכומים', { actions: iconBtn('add-item', ICON.plus, 'הוספת חומר'), hero: { color: 'green', chips: libChips() } })}
       ${viewSeg}
       ${notebooksGrid()}`;
   }
   return `
-    ${head('חומר וסיכומים', { actions: iconBtn('add-item', ICON.plus, 'הוספת חומר') })}
+    ${head('חומר וסיכומים', { actions: iconBtn('add-item', ICON.plus, 'הוספת חומר'), hero: { color: 'green', chips: libChips() } })}
     ${viewSeg}
     <label class="search"><span aria-hidden="true">${ICON.search}</span>
       <input type="search" placeholder="חיפוש בסיכומים ובחומר" value="${esc(S.ui.libQuery)}" data-input="lib-query" aria-label="חיפוש">
@@ -730,7 +794,17 @@ export function more() {
   const chev = `<span class="chev">${ICON.fwd}</span>`;
   const initial = (d.profile.name || '').trim().slice(0, 1) || '🙂';
   return `
-    ${head('הגדרות', { back: '#home' })}
+    ${head('הגדרות', {
+      back: '#home',
+      hero: {
+        color: 'graphite',
+        chips: [
+          classLabel() ? `${ICON.grad}<span>כיתה ${esc(classLabel())}</span>` : '',
+          `${ICON.calendar}<span>שנת ${esc(currentYear()?.name || '')}</span>`,
+          `${ICON.book}<span>${d.subjects.length} מקצועות</span>`,
+        ],
+      },
+    })}
 
     <div class="card profile-card">
       <span class="avatar" aria-hidden="true">${esc(initial)}</span>

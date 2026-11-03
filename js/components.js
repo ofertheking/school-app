@@ -3,7 +3,42 @@ import { S, subjectColor } from './core.js';
 import { esc } from './util.js';
 import { ICON } from './icons.js';
 
-export function head(title, { back, actions = '', sub = '', navTitle } = {}) {
+/** Banner art: one of a few geometric motifs (white, translucent), picked per subject. */
+export function bannerArt(seed) {
+  const W = (a) => `rgba(255,255,255,${a})`;
+  const v = seed % 4;
+  let art;
+  if (v === 0) {
+    art = `<circle cx="252" cy="18" r="72" fill="${W(0.14)}"/><circle cx="196" cy="98" r="34" fill="${W(0.12)}"/><circle cx="288" cy="84" r="15" fill="${W(0.2)}"/>`;
+  } else if (v === 1) {
+    art = `<path d="M110 74 Q150 44 190 74 T270 74 T350 74 V120 H110Z" fill="${W(0.13)}"/><path d="M135 92 Q175 64 215 92 T295 92 T375 92 V120 H135Z" fill="${W(0.13)}"/><circle cx="258" cy="28" r="11" fill="${W(0.26)}"/>`;
+  } else if (v === 2) {
+    art = `<path d="M206 -10 L306 -10 L306 84Z" fill="${W(0.14)}"/><path d="M166 116 L226 42 L286 116Z" fill="${W(0.12)}"/><rect x="238" y="22" width="22" height="22" rx="5" transform="rotate(22 249 33)" fill="${W(0.22)}"/>`;
+  } else {
+    let dots = '';
+    for (let x = 182; x <= 292; x += 15) for (let y = 14; y <= 96; y += 15) dots += `<circle cx="${x}" cy="${y}" r="2.1" fill="${W(0.3)}"/>`;
+    art = `${dots}<circle cx="236" cy="58" r="36" fill="none" stroke="${W(0.2)}" stroke-width="11"/>`;
+  }
+  return `<svg class="cc-art" viewBox="0 0 300 110" preserveAspectRatio="xMaxYMid slice" aria-hidden="true">${art}</svg>`;
+}
+
+const seedOf = (str) => [...String(str)].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
+
+/**
+ * Screen header: the pinned nav bar (back / compact title / actions) and either
+ * a plain large title or — with `hero` — a colourful banner like the home screen:
+ * hero: { color: 'red' | 'orange' | …, chips: [html…] }.
+ */
+export function head(title, { back, actions = '', sub = '', navTitle, hero } = {}) {
+  const banner = hero
+    ? `<header class="page-hero h-${hero.color || 'blue'}"${hero.nb ? ` style="--nb:${hero.nb}"` : ''}>${bannerArt(seedOf(title))}
+        <div class="ph-text">
+          <h1 class="large-title">${esc(title)}</h1>
+          ${sub ? `<p class="ph-sub">${sub}</p>` : ''}
+          ${(hero.chips || []).filter(Boolean).length ? `<div class="hh-chips">${hero.chips.filter(Boolean).map((c) => `<span class="hh-chip">${c}</span>`).join('')}</div>` : ''}
+        </div>
+      </header>`
+    : '';
   return `<div class="navbar">
     <div class="navbar-in">
       ${back ? `<button class="icon-btn back" data-go="${back}" aria-label="חזרה">${ICON.back}</button>` : '<span class="nav-sp"></span>'}
@@ -12,12 +47,13 @@ export function head(title, { back, actions = '', sub = '', navTitle } = {}) {
     </div>
   </div>
   ${
-    title || sub
+    banner ||
+    (title || sub
       ? `<header class="page-head">
     <h1 class="large-title">${esc(title)}</h1>
     ${sub ? `<p class="subtitle">${sub}</p>` : ''}
   </header>`
-      : '' /* the screen shows its own title (banner / editor) */
+      : '') /* the screen shows its own title (banner / editor) */
   }`;
 }
 

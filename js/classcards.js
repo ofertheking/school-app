@@ -5,28 +5,11 @@ import { esc, relDay, daysUntil, pad } from './util.js';
 import { ICON } from './icons.js';
 import { DAY_NAMES, lessonsOn } from './schedule.js';
 import { L, tr } from './i18n.js';
+import { bannerArt } from './components.js';
+export { bannerArt };
 
 const colorOf = (s) => (s ? `var(--c${s.color % 8})` : 'var(--c-none)');
 const hash = (str) => [...String(str)].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
-
-/** Banner art: one of a few geometric motifs (white, translucent), picked per subject. */
-export function bannerArt(seed) {
-  const W = (a) => `rgba(255,255,255,${a})`;
-  const v = seed % 4;
-  let art;
-  if (v === 0) {
-    art = `<circle cx="252" cy="18" r="72" fill="${W(0.14)}"/><circle cx="196" cy="98" r="34" fill="${W(0.12)}"/><circle cx="288" cy="84" r="15" fill="${W(0.2)}"/>`;
-  } else if (v === 1) {
-    art = `<path d="M110 74 Q150 44 190 74 T270 74 T350 74 V120 H110Z" fill="${W(0.13)}"/><path d="M135 92 Q175 64 215 92 T295 92 T375 92 V120 H135Z" fill="${W(0.13)}"/><circle cx="258" cy="28" r="11" fill="${W(0.26)}"/>`;
-  } else if (v === 2) {
-    art = `<path d="M206 -10 L306 -10 L306 84Z" fill="${W(0.14)}"/><path d="M166 116 L226 42 L286 116Z" fill="${W(0.12)}"/><rect x="238" y="22" width="22" height="22" rx="5" transform="rotate(22 249 33)" fill="${W(0.22)}"/>`;
-  } else {
-    let dots = '';
-    for (let x = 182; x <= 292; x += 15) for (let y = 14; y <= 96; y += 15) dots += `<circle cx="${x}" cy="${y}" r="2.1" fill="${W(0.3)}"/>`;
-    art = `${dots}<circle cx="236" cy="58" r="36" fill="none" stroke="${W(0.2)}" stroke-width="11"/>`;
-  }
-  return `<svg class="cc-art" viewBox="0 0 300 110" preserveAspectRatio="xMaxYMid slice" aria-hidden="true">${art}</svg>`;
-}
 
 /** Teacher and room for a subject, from the timetable. */
 export function teacherOf(sid) {

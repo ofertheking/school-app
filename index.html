@@ -29,6 +29,21 @@
   <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
+  <!-- Loading screen: drops fall into a circle that fills up, then floods the screen into the app. -->
+  <div id="splash" aria-hidden="true">
+    <div class="sp-stage">
+      <div class="sp-drops"><i></i><i></i><i></i><i></i></div>
+      <div class="sp-orb">
+        <div class="sp-fill">
+          <svg class="sp-wave back" viewBox="0 0 240 24" preserveAspectRatio="none"><path d="M0 12 C20 2 40 2 60 12 S100 22 120 12 S160 2 180 12 S220 22 240 12 V24 H0Z"/></svg>
+          <svg class="sp-wave" viewBox="0 0 240 24" preserveAspectRatio="none"><path d="M0 12 C20 2 40 2 60 12 S100 22 120 12 S160 2 180 12 S220 22 240 12 V24 H0Z"/></svg>
+        </div>
+        <span class="sp-shine"></span>
+      </div>
+      <p class="sp-name">הלימודים שלי</p>
+    </div>
+  </div>
+  <script>window.__splashT = performance.now();</script>
   <main id="view" class="view" tabindex="-1"></main>
 
   <nav class="tabbar" aria-label="ניווט ראשי">

@@ -29,6 +29,7 @@ import * as Grades from './grades.js';
 import * as Notes from './notes.js';
 import * as Bridge from './bridge.js';
 import * as Motion from './motion.js';
+import { checkAchievements } from './achievements.js';
 import { applyAppearance } from './appearance.js';
 import { startTranslating, setLang } from './i18n.js';
 import { ICON } from './icons.js';
@@ -120,6 +121,7 @@ function render() {
     hydrateFiles(view);
     watchLargeTitle();
     Motion.moveTabIndicator();
+    checkAchievements();
     if (!changed) return; // in-place re-renders (ticking a task…) don't animate
     // Pushing / popping a screen slides it (view transition); switching tabs or
     // the first paint plays the staggered entrance instead.
@@ -1355,6 +1357,15 @@ async function boot() {
   }
   render();
   document.documentElement.classList.add('ready');
+  // The loading screen floods away; the first screen plays its entrance as it shows.
+  Motion.endSplash(() => {
+    view.classList.remove('anim');
+    void view.offsetWidth;
+    view.classList.add('anim', 'entering');
+    setTimeout(() => view.classList.remove('anim'), 650);
+    setTimeout(() => view.classList.remove('entering'), 1400);
+    Motion.countUp(view);
+  });
 
   // Daily safety copy, then look for anything that went missing.
   autoSnapshot()

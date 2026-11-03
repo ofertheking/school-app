@@ -300,7 +300,14 @@ export function gradesView(examCard) {
 
 /** #grades — the full screen. */
 export function gradesPage(examCard) {
-  return `${head('ציונים', { actions: iconBtn('add-grade', ICON.plus, 'הוספת ציון') })}${gradesView(examCard)}`;
+  const all = gradedRecords();
+  const best = bySubject(all)[0];
+  const chips = [
+    `${ICON.chart}<span>${all.length} ציונים</span>`,
+    best ? `<span>🏆 ${esc(subjectName(best.sid))} ${fmtAvg(best.avg)}</span>` : '',
+    (S.data.attendance || []).length ? `<span>${S.data.attendance.filter((a) => a.kind === 'absent').length} חיסורים</span>` : '',
+  ];
+  return `${head('ציונים', { actions: iconBtn('add-grade', ICON.plus, 'הוספת ציון'), hero: { color: 'indigo', chips } })}${gradesView(examCard)}`;
 }
 
 /** What grade on the next (equal-weight) exam brings the average to `target`. */

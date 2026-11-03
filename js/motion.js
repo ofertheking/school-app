@@ -203,3 +203,23 @@ export function enableEdgeSwipe(view) {
     { passive: true }
   );
 }
+
+/**
+ * Finish the loading screen: wait until the circle has filled (≈1.9s after it
+ * appeared), let it flood the screen, then call onReveal as the app shows through.
+ */
+export function endSplash(onReveal) {
+  const el = document.getElementById('splash');
+  if (!el) return onReveal?.();
+  if (reduced()) {
+    el.remove();
+    return onReveal?.();
+  }
+  const started = window.__splashT ?? 0;
+  const wait = Math.max(0, 1900 - (performance.now() - started));
+  setTimeout(() => {
+    el.classList.add('done');
+    setTimeout(() => onReveal?.(), 420);
+    setTimeout(() => el.remove(), 900);
+  }, wait);
+}
