@@ -28,10 +28,11 @@ import * as Board from './examBoard.js';
 import * as Grades from './grades.js';
 import * as Notes from './notes.js';
 import { applyAppearance } from './appearance.js';
+import { startTranslating, setLang } from './i18n.js';
 import { ICON } from './icons.js';
 import {
   consumeOAuthRedirect, getToken, forgetToken, startClassroomLogin, syncClassroom,
-  explainClassroomError, parseScheduleText, examICS, googleCalendarURL, b64url,
+  explainClassroomError, parseScheduleText, icsToLines, examICS, googleCalendarURL, b64url,
 } from './integrations.js';
 
 const view = document.getElementById('view');
@@ -472,7 +473,7 @@ function addItemSheet(subjectId) {
  * Paste-import from Webtop (or any table): exams, homework or grades.
  * What was pasted is detected automatically; the tabs switch it by hand.
  */
-function webtopSheet(preset) {
+function webtopSheet(preset, prefill = '') {
   let rows = [];
   let as = ['exam', 'task', 'grade'].includes(preset) ? preset : 'exam';
   let lastText = '';
@@ -549,6 +550,10 @@ function webtopSheet(preset) {
           }
         });
         sheet.querySelector('[data-parse]').addEventListener('click', parse);
+        if (prefill) {
+          box.value = prefill;
+          parse();
+        }
         const onEdit = (ev) => {
           const el = ev.target;
           if (el.dataset.i == null) return;
@@ -1025,6 +1030,7 @@ const ACTIONS = {
   // backup
   export: () => exportBackup(),
   'reload-app': () => location.reload(),
+  'set-lang': ({ val }) => setLang(val),
   async reset() {
     if (!(await askConfirm('למחוק את כל הנתונים?', { ok: 'מחיקת הכל', detail: 'אי אפשר לבטל. כדאי לייצא גיבוי קודם.' }))) return;
     await clearAll();
@@ -1139,7 +1145,8 @@ document.addEventListener(
     const dy = p.clientY - swipe0.y;
     const quick = Date.now() - swipe0.t < 600;
     swipe0 = null;
-    if (quick && Math.abs(dx) > 50 && Math.abs(dy) < 40) Sched.stepHomeDay(dx > 0 ? 1 : -1);
+    const rtl = document.documentElement.dir !== 'ltr';
+    if (quick && Math.abs(dx) > 50 && Math.abs(dy) < 40) Sched.stepHomeDay((dx > 0) === rtl ? 1 : -1);
   },
   { passive: true }
 );
@@ -1198,6 +1205,19 @@ document.addEventListener('change', async (e) => {
     const f = el.files[0];
     el.value = '';
     await Sched.importTimetablePdf(f);
+  }
+  if (el.hasAttribute('data-ics')) {
+    const f = el.files[0];
+    el.value = '';
+    if (f) {
+      const lines = icsToLines(await f.text());
+      if (!lines.length) toast('לא מצאתי אירועים מהחודש האחרון והלאה בקובץ', 5000);
+      else {
+        // Mostly exams? Import as exams, otherwise as tasks (Classroom assignments).
+        const examLike = lines.filter((l) => /מבחן|בוחן|בגרות|מתכונת|quiz|test|exam/i.test(l)).length;
+        webtopSheet(examLike > lines.length / 2 ? 'exam' : 'task', lines.join('\n'));
+      }
+    }
   }
   if (el.hasAttribute('data-board-pdf')) {
     const f = el.files[0];
@@ -1282,6 +1302,7 @@ hooks.navigate = navigate;
 // ---------------------------------------------------------------- boot
 
 async function boot() {
+  startTranslating(); // English: translate the static shell and everything rendered from now on
   await initStore();
   await load();
   if (S.loadFailed) {

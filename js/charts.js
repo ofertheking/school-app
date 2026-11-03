@@ -1,5 +1,6 @@
 // Tiny SVG/HTML charts (RTL: Sunday on the right).
 import { esc, fmtMin, DAY_LETTERS, fmtDayMonth } from './util.js';
+import { RTL } from './i18n.js';
 
 function niceMaxHours(minutes) {
   const h = minutes / 60;
@@ -34,14 +35,15 @@ export function weekChart(days) {
   let grid = '';
   for (let h = 0; h <= maxH; h += step) {
     const y = yOf(h * 60);
-    grid += `<line x1="${padL}" x2="${padL + plotW}" y1="${y}" y2="${y}" class="${h === 0 ? 'c-axis' : 'c-grid'}"/>`;
-    grid += `<text x="${W - 2}" y="${y + 4}" class="c-tick" text-anchor="end">${h}</text>`;
+    const gx1 = RTL ? padL : W - padL - plotW;
+    grid += `<line x1="${gx1}" x2="${gx1 + plotW}" y1="${y}" y2="${y}" class="${h === 0 ? 'c-axis' : 'c-grid'}"/>`;
+    grid += `<text x="${RTL ? W - 2 : 2}" y="${y + 4}" class="c-tick" text-anchor="${RTL ? 'end' : 'start'}">${h}</text>`;
   }
 
   let bars = '';
   let hits = '';
   days.forEach((d, i) => {
-    const cx = padL + plotW - (i + 0.5) * slot;
+    const cx = RTL ? padL + plotW - (i + 0.5) * slot : W - (padL + plotW - (i + 0.5) * slot);
     const yBase = yOf(0);
     if (d.minutes > 0) {
       const yTop = Math.min(yBase - 2, yOf(d.minutes));

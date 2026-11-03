@@ -1,6 +1,7 @@
 // Read a school exam board (לוח מבחנים) PDF — the kind schools export from Excel:
 // one row per date, a column per grade / class — and add the exams that belong
 // to YOUR grade and YOUR subjects.
+import { LOCALE } from './i18n.js';
 import { S, save, ensureSubject } from './core.js';
 import { esc, uid, isoDate, fmtDate, daysUntil } from './util.js';
 import { openSheet, toast } from './ui.js';
@@ -503,7 +504,7 @@ function subjectSelect(r, i) {
   return `<select class="board-subj" data-i="${i}" data-f="pick" aria-label="מקצוע">${opts.join('')}</select>`;
 }
 
-const MONTH = new Intl.DateTimeFormat('he-IL', { month: 'short' });
+const MONTH = new Intl.DateTimeFormat(LOCALE, { month: 'short' });
 const addLabel = (n) => (n === 1 ? 'הוספת מבחן אחד' : n ? `הוספת ${n} מבחנים` : 'לא נבחרו מבחנים');
 
 function rowHTML(r, i) {

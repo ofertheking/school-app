@@ -317,6 +317,33 @@ function guessType(text) {
 }
 
 /** Returns [{date, time, title, subjectId, type}] */
+/**
+ * A calendar file (.ics — Google Calendar, Classroom's class calendars, Outlook…)
+ * → one "dd/mm/yyyy [hh:mm] title" line per event, ready for parseScheduleText.
+ * Events older than a month are skipped.
+ */
+export function icsToLines(text) {
+  const unfolded = String(text || '').replace(/\r?\n[ \t]/g, '');
+  const unesc = (v) => v.replace(/\\n/gi, ' ').replace(/\\([,;\\])/g, '$1').trim();
+  const since = Date.now() - 31 * 86400000;
+  const p2 = (n) => String(n).padStart(2, '0');
+  const out = [];
+  for (const ev of unfolded.split('BEGIN:VEVENT').slice(1)) {
+    const get = (k) => (ev.match(new RegExp(`^${k}(?:;[^:\\r\\n]*)?:(.*)$`, 'm')) || [])[1] || '';
+    const dt = get('DTSTART');
+    const m = dt.match(/(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2}))?/);
+    if (!m) continue;
+    const d = /Z$/.test(dt.trim()) && m[4]
+      ? new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]))
+      : new Date(+m[1], +m[2] - 1, +m[3], +(m[4] || 0), +(m[5] || 0));
+    if (d.getTime() < since) continue;
+    const title = unesc(get('SUMMARY')) || unesc(get('DESCRIPTION')).slice(0, 80);
+    if (!title) continue;
+    out.push(`${p2(d.getDate())}/${p2(d.getMonth() + 1)}/${d.getFullYear()} ${m[4] ? `${p2(d.getHours())}:${p2(d.getMinutes())} ` : ''}${title}`);
+  }
+  return out;
+}
+
 export function parseScheduleText(text) {
   const lines = String(text || '').split(/\r?\n/).map((l) => l.trim());
   const rows = [];
@@ -345,7 +372,12 @@ export function parseScheduleText(text) {
     const subj = guessSubject(rest);
     let title = rest;
     if (subj) {
-      const stripped = rest.replace(new RegExp(subj.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), '').replace(/^[\s·\-–]+|[\s·\-–]+$/g, '');
+      // Only a standalone subject (a table column) is removed — "עבודה בהיסטוריה" keeps its word.
+      const nameRe = subj.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const stripped = rest
+        .replace(new RegExp(`(^|[\\s·\\-–:|])${nameRe}(?=$|[\\s·\\-–:,|])`, 'g'), '$1')
+        .replace(/\s{2,}/g, ' ')
+        .replace(/^[\s·\-–]+|[\s·\-–]+$/g, '');
       title = stripped || subj.name;
     }
     rows.push({ date, time, title, subjectId: subj?.id || '', type: guessType(rest) });

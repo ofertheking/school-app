@@ -1,4 +1,5 @@
 // Screen renderers. Each returns an HTML string; app.js wires the actions.
+import { LOCALE, LANGS, lang } from './i18n.js';
 import {
   S, subject, subjectName, subjectColor, readiness, upcomingExams, pastExams, openTasks,
   gradeAverage, todayMinutes, weekDays, weekBySubject, streak, timerElapsed, examUrgency,
@@ -232,7 +233,7 @@ export function exams() {
   `;
 }
 
-const MONTH_YEAR = new Intl.DateTimeFormat('he-IL', { month: 'long', year: 'numeric' });
+const MONTH_YEAR = new Intl.DateTimeFormat(LOCALE, { month: 'long', year: 'numeric' });
 
 /** הוגשו: every exam that's behind you, newest first, grouped by month. */
 function doneExams() {
@@ -741,6 +742,9 @@ export function more() {
         ${[['system', 'אוטומטי'], ['light', 'בהיר'], ['dark', 'כהה']]
           .map(([v, l]) => `<button class="seg-btn${ap.theme === v ? ' on' : ''}" role="radio" aria-checked="${ap.theme === v}" data-act="set-theme" data-val="${v}">${l}</button>`)
           .join('')}
+      </div>
+      <div class="seg lang-seg" role="radiogroup" aria-label="שפה / Language">
+        ${LANGS.map(([v, l]) => `<button class="seg-btn${lang === v ? ' on' : ''}" role="radio" aria-checked="${lang === v}" data-act="set-lang" data-val="${v}" data-raw>${l}</button>`).join('')}
       </div>
       <div class="accent-row" role="radiogroup" aria-label="צבע ראשי">
         ${Object.entries(ACCENTS)

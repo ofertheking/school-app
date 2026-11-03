@@ -306,7 +306,8 @@ export function openGallery(entries, start = 0) {
           const dx = ev.changedTouches[0].clientX - x0;
           x0 = null;
           // RTL: pages turn to the right, like a Hebrew notebook.
-          if (Math.abs(dx) > 45) go(dx > 0 ? 1 : -1);
+          const rtl = document.documentElement.dir !== 'ltr';
+          if (Math.abs(dx) > 45) go((dx > 0) === rtl ? 1 : -1);
         });
         show();
       },

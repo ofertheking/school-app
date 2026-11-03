@@ -1,11 +1,12 @@
 // Month calendar of exams and tasks (Apple Calendar style), RTL: Sunday on the right.
+import { LOCALE } from './i18n.js';
 import { S, subjectColor } from './core.js';
 import { esc, isoDate, parseISO, fmtDateLong, DAY_LETTERS, pad } from './util.js';
 import { ICON } from './icons.js';
 import { empty } from './components.js';
 import { rerender } from './router.js';
 
-const monthFmt = new Intl.DateTimeFormat('he-IL', { month: 'long', year: 'numeric' });
+const monthFmt = new Intl.DateTimeFormat(LOCALE, { month: 'long', year: 'numeric' });
 
 function monthOf() {
   if (!S.ui.calMonth) S.ui.calMonth = isoDate().slice(0, 7);

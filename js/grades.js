@@ -1,6 +1,7 @@
 // Grades (ציונים), Webtop-style: overall and per-subject averages, half-years,
 // a report card, a trend chart, a "what do I need on the next exam" calculator,
 // attendance (חיסורים / איחורים), and reading grades copied from Webtop.
+import { LOCALE, RTL } from './i18n.js';
 import {
   S, save, subject, subjectName, subjectColor, pastExams, gradedRecords, hasGrade, semesterOf,
   weightedAverage, upcomingExams, EXAM_TYPES, schoolYearName,
@@ -57,8 +58,9 @@ function spark(values, color) {
     hi = mid + 6;
   }
   const y = (v) => P + (1 - (v - lo) / (hi - lo)) * (H - 2 * P);
-  // RTL: newest grade on the left (end of the reading direction).
-  const x = (i) => W - P - (i / (values.length - 1)) * (W - 2 * P);
+  // Newest grade at the end of the reading direction (left in Hebrew, right in English).
+  const x0 = (i) => W - P - (i / (values.length - 1)) * (W - 2 * P);
+  const x = (i) => (RTL ? x0(i) : W - x0(i));
   const pts = values.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
   const last = values.length - 1;
   return `<svg class="spark" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" aria-hidden="true">
@@ -67,7 +69,7 @@ function spark(values, color) {
   </svg>`;
 }
 
-const MONTH = new Intl.DateTimeFormat('he-IL', { month: 'short' });
+const MONTH = new Intl.DateTimeFormat(LOCALE, { month: 'short' });
 
 /**
  * Grades over time: each grade a dot (de-emphasised), the running average a 2px
@@ -84,12 +86,14 @@ function trendChart(records) {
   const step = 100 - lo > 50 ? 20 : 10;
   const yOf = (v) => padT + plotH - ((v - lo) / (100 - lo)) * plotH;
   const n = records.length;
-  const xOf = (i) => padL + plotW - (n === 1 ? plotW / 2 : (i / (n - 1)) * plotW);
+  const xr = (i) => padL + plotW - (n === 1 ? plotW / 2 : (i / (n - 1)) * plotW);
+  const xOf = (i) => (RTL ? xr(i) : W - xr(i)); // English: time runs left → right, axis on the left
 
   let grid = '';
   for (let v = lo; v <= 100; v += step) {
-    grid += `<line x1="${padL}" x2="${padL + plotW}" y1="${yOf(v)}" y2="${yOf(v)}" class="${v === lo ? 'c-axis' : 'c-grid'}"/>`;
-    grid += `<text x="${W - 4}" y="${yOf(v) + 4}" class="c-tick" text-anchor="end">${v}</text>`;
+    const gx1 = RTL ? padL : W - padL - plotW;
+    grid += `<line x1="${gx1}" x2="${gx1 + plotW}" y1="${yOf(v)}" y2="${yOf(v)}" class="${v === lo ? 'c-axis' : 'c-grid'}"/>`;
+    grid += `<text x="${RTL ? W - 4 : 4}" y="${yOf(v) + 4}" class="c-tick" text-anchor="${RTL ? 'end' : 'start'}">${v}</text>`;
   }
   // month labels at the first grade of each month
   let months = '';
@@ -126,7 +130,7 @@ function trendChart(records) {
       <polyline points="${line}" class="g-line"/>
       ${dots}
       <circle cx="${endX}" cy="${endY}" r="4.5" class="g-end"/>
-      <text x="${endX - 7}" y="${endY - 9}" class="c-val" text-anchor="end">${running[n - 1]}</text>
+      <text x="${RTL ? endX - 7 : endX + 7}" y="${endY - 9}" class="c-val" text-anchor="${RTL ? 'end' : 'start'}">${running[n - 1]}</text>
       ${hits}
     </svg>
     <details class="chart-table"><summary>הצגה כטבלה</summary>

@@ -1,4 +1,5 @@
 // Small pure helpers shared by the whole app.
+import { LOCALE, L, isEn } from './i18n.js';
 
 export const uid = () =>
   Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
@@ -32,21 +33,21 @@ export function daysUntil(iso) {
 
 export function relDay(iso) {
   const n = daysUntil(iso);
-  if (n === 0) return 'היום';
-  if (n === 1) return 'מחר';
-  if (n === 2) return 'מחרתיים';
-  if (n === -1) return 'אתמול';
-  if (n === 7) return 'בעוד שבוע';
-  if (n > 0) return `בעוד ${n} ימים`;
-  return `לפני ${-n} ימים`;
+  if (n === 0) return L('היום', 'Today');
+  if (n === 1) return L('מחר', 'Tomorrow');
+  if (n === 2) return L('מחרתיים', 'In 2 days');
+  if (n === -1) return L('אתמול', 'Yesterday');
+  if (n === 7) return L('בעוד שבוע', 'In a week');
+  if (n > 0) return L(`בעוד ${n} ימים`, `In ${n} days`);
+  return L(`לפני ${-n} ימים`, `${-n} days ago`);
 }
 
-const fmtShort = new Intl.DateTimeFormat('he-IL', { weekday: 'short', day: 'numeric', month: 'short' });
-const fmtLong = new Intl.DateTimeFormat('he-IL', { weekday: 'long', day: 'numeric', month: 'long' });
-const fmtDM = new Intl.DateTimeFormat('he-IL', { day: 'numeric', month: 'numeric' });
+const fmtShort = new Intl.DateTimeFormat(LOCALE, { weekday: 'short', day: 'numeric', month: 'short' });
+const fmtLong = new Intl.DateTimeFormat(LOCALE, { weekday: 'long', day: 'numeric', month: 'long' });
+const fmtDM = new Intl.DateTimeFormat(LOCALE, { day: 'numeric', month: 'numeric' });
 let fmtHeb = null;
 try {
-  fmtHeb = new Intl.DateTimeFormat('he-IL-u-ca-hebrew', { day: 'numeric', month: 'long' });
+  fmtHeb = new Intl.DateTimeFormat(isEn ? 'en-u-ca-hebrew' : 'he-IL-u-ca-hebrew', { day: 'numeric', month: 'long' });
 } catch { /* hebrew calendar not supported */ }
 
 export const fmtDate = (iso) => fmtShort.format(parseISO(iso));
@@ -64,9 +65,9 @@ export function fmtMin(min) {
   min = Math.round(min || 0);
   const h = Math.floor(min / 60);
   const m = min % 60;
-  if (!h) return `${m} ד׳`;
-  if (!m) return `${h} ש׳`;
-  return `${h} ש׳ ${m} ד׳`;
+  if (!h) return L(`${m} ד׳`, `${m}m`);
+  if (!m) return L(`${h} ש׳`, `${h}h`);
+  return L(`${h} ש׳ ${m} ד׳`, `${h}h ${m}m`);
 }
 
 /** Compact duration for tight tiles: "2:45" hours or "40" minutes, with unit. */
@@ -74,7 +75,7 @@ export function fmtMinShort(min) {
   min = Math.round(min || 0);
   const h = Math.floor(min / 60);
   const m = min % 60;
-  return h ? { value: `${h}:${pad(m)}`, unit: 'ש׳' } : { value: String(m), unit: 'דק׳' };
+  return h ? { value: `${h}:${pad(m)}`, unit: L('ש׳', 'h') } : { value: String(m), unit: L('דק׳', 'min') };
 }
 
 /** Milliseconds -> "HH:MM:SS" or "MM:SS" */
@@ -101,14 +102,14 @@ export function addDays(d, n) {
   return x;
 }
 
-export const DAY_LETTERS = ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'ש׳'];
+export const DAY_LETTERS = isEn ? ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'] : ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'ש׳'];
 
 export function greeting(d = new Date()) {
   const h = d.getHours();
-  if (h >= 5 && h < 12) return 'בוקר טוב';
-  if (h >= 12 && h < 17) return 'צהריים טובים';
-  if (h >= 17 && h < 22) return 'ערב טוב';
-  return 'לילה טוב';
+  if (h >= 5 && h < 12) return L('בוקר טוב', 'Good morning');
+  if (h >= 12 && h < 17) return L('צהריים טובים', 'Good afternoon');
+  if (h >= 17 && h < 22) return L('ערב טוב', 'Good evening');
+  return L('לילה טוב', 'Good night');
 }
 
 export function debounce(fn, ms) {

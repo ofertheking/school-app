@@ -1,7 +1,7 @@
 // Notebooks (מחברות): one per subject, holding photographed notebook pages,
 // summaries, lesson notes, files, links and flashcard decks for that subject.
 import { S, save, subject, subjectName, itemKind, createItem } from './core.js';
-import { esc, fmtDate, isoDate } from './util.js';
+import { esc, fmtDate, isoDate, relDay } from './util.js';
 import { ICON } from './icons.js';
 import { head, section, empty } from './components.js';
 import { storeFiles, openGallery } from './files.js';
@@ -48,10 +48,20 @@ export function notebooksGrid() {
     .map((sid) => {
       const c = counts(sid);
       const cover = pageEntries(sid)[0];
-      return `<button class="nb-card" data-go="#notebook-${keyOf(sid)}" style="--nb:${colorOf(sid)}">
-        <span class="nb-cover">${cover ? `<img alt="" data-file-src="${cover.fid}">` : `<span class="nb-lines" aria-hidden="true"></span>`}<span class="nb-spine"></span></span>
-        <span class="nb-name">${esc(sid ? subjectName(sid) : 'כללי')}</span>
+      const name = sid ? subjectName(sid) : 'כללי';
+      const last = itemsOf(sid).reduce((m, i) => Math.max(m, i.updatedAt || i.createdAt || 0), 0);
+      return `<button class="nb-card" data-go="#notebook-${keyOf(sid)}" style="--nb:${colorOf(sid)}" aria-label="מחברת ${esc(name)}">
+        <span class="nb-book" aria-hidden="true">
+          <span class="nb-edge"></span>
+          <span class="nb-cover">
+            <span class="nb-rings"></span>
+            <span class="nb-label"><b>${esc(name)}</b><i></i><i></i></span>
+            ${cover ? `<span class="nb-peek"><img alt="" data-file-src="${cover.fid}"></span>` : ''}
+            ${c.pages ? `<span class="nb-count">${ICON.camera}${c.pages}</span>` : ''}
+          </span>
+        </span>
         <span class="nb-meta">${c.total ? [c.pages && `${c.pages} דפים`, c.notes && `${c.notes} סיכומים`, c.other && `${c.other} קבצים`].filter(Boolean).join(' · ') : 'ריקה'}</span>
+        ${last ? `<span class="nb-when">${relDay(isoDate(new Date(last)))}</span>` : ''}
       </button>`;
     })
     .join('')}</div>`;
@@ -99,10 +109,16 @@ export function notebookPage(key) {
     .join('');
 
   return `
-    ${head(`מחברת ${name}`, {
-      back: '#library',
-      sub: `<span class="dot lg" style="background:${colorOf(sid)}"></span> ${c.pages} דפים · ${c.notes} סיכומים · ${decks.length} חפיסות כרטיסיות`,
-    })}
+    ${head('', { back: '#library', navTitle: `מחברת ${name}` })}
+    <div class="nb-hero" style="--nb:${colorOf(sid)}">
+      <span class="nb-rings"></span>
+      <div class="nb-hero-label"><small>מחברת</small><b class="large-title">${esc(name)}</b></div>
+      <div class="nb-hero-stats">
+        <span><b>${c.pages}</b><small>דפים</small></span>
+        <span><b>${c.notes}</b><small>סיכומים</small></span>
+        <span><b>${decks.length}</b><small>חפיסות</small></span>
+      </div>
+    </div>
     <div class="nb-actions">
       <label class="btn primary nb-shoot">${ICON.camera} צילום דפים מהמחברת
         <input type="file" accept="image/*" multiple data-nb-pages="${sid}" hidden></label>
