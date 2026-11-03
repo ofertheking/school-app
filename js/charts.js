@@ -92,10 +92,10 @@ export function meter(pct, { label = '' } = {}) {
 }
 
 /** Circular progress ring for the weekly goal. */
-export function ring(pct, centerText, sub) {
+export function ring(pct, centerText, sub, label = '') {
   const p = Math.max(0, Math.min(100, pct || 0));
   const r = 34, c = 2 * Math.PI * r;
-  return `<svg class="ring" viewBox="0 0 80 80" role="img" aria-label="${esc(`${Math.round(p)}% מהמטרה השבועית`)}">
+  return `<svg class="ring" viewBox="0 0 80 80" role="img" aria-label="${esc(label || `${Math.round(p)}% מהמטרה השבועית`)}">
     <circle cx="40" cy="40" r="${r}" class="ring-track"/>
     <circle cx="40" cy="40" r="${r}" class="ring-fill" stroke-dasharray="${(p / 100) * c} ${c}" transform="rotate(-90 40 40)"/>
     <text x="40" y="${sub ? 40 : 45}" text-anchor="middle" class="ring-text">${esc(centerText)}</text>

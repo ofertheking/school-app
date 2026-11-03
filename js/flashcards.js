@@ -4,7 +4,7 @@ import { esc, uid, isoDate, addDays, startOfDay, fmtMin } from './util.js';
 import { formSheet, askConfirm, toast, closeAllSheets } from './ui.js';
 import { ICON } from './icons.js';
 import { head, iconBtn, empty, section, dot } from './components.js';
-import { meter } from './charts.js';
+import { meter, ring } from './charts.js';
 import { rerender, go } from './router.js';
 
 // Days until the next review for each Leitner box.
@@ -70,15 +70,20 @@ export function decksList() {
     return `${empty('🃏', 'כרטיסיות לשינון: מושגים, תאריכים, מילים באנגלית, נוסחאות. האפליקציה מחזירה בתדירות גבוהה את מה שעוד לא יודעים.')}${actionsRow}`;
   }
   return `${actionsRow}
-    <div class="card list deck-list">${decks
+    <div class="deck-grid">${decks
       .map((d) => {
-        const n = deckCards(d.id).length;
+        const cs = deckCards(d.id);
+        const n = cs.length;
         const due = dueCount(d.id);
-        return `<button class="row-btn" data-go="#deck-${d.id}">
-          <span class="stripe tall" style="background:${subjectColor(d.subjectId)}"></span>
-          <span class="grow"><b>${esc(d.title)}</b><br><span class="muted small">${esc(subjectName(d.subjectId))} · ${n} כרטיסיות</span></span>
-          ${due && n ? `<span class="chip cool">${due} לחזרה</span>` : n ? `<span class="chip">✓ הכל חזר</span>` : ''}
-          <span class="chev">${ICON.fwd}</span>
+        const pct = n ? Math.round((cs.filter((c) => (c.box || 0) >= 4).length / n) * 100) : 0;
+        return `<button class="deck-tile" data-go="#deck-${d.id}" style="--dk:${subjectColor(d.subjectId)}">
+          <span class="dt-stack" aria-hidden="true"><i></i><i></i></span>
+          <span class="dt-face">
+            ${due && n ? `<span class="dt-due">${due} לחזרה</span>` : n ? `<span class="dt-due ok">✓ הכל חזר</span>` : ''}
+            <b class="dt-title">${esc(d.title)}</b>
+            <span class="dt-sub">${esc(subjectName(d.subjectId))} · ${n} כרטיסיות</span>
+            <span class="dt-bar" role="img" aria-label="${pct}% בשליטה"><span style="width:${pct}%"></span></span>
+          </span>
         </button>`;
       })
       .join('')}</div>`;
@@ -90,16 +95,30 @@ export function deckPage(id) {
   const cards = deckCards(id);
   const due = cards.filter(isDue).length;
   const mastered = cards.filter((c) => (c.box || 0) >= 4).length;
+  const pct = cards.length ? Math.round((mastered / cards.length) * 100) : 0;
+  const learning = cards.filter((c) => (c.box || 0) > 0 && (c.box || 0) < 4).length;
   return `
     ${head(d.title, {
       back: '#study',
       actions: `${iconBtn('deck-edit', ICON.edit, 'עריכת חפיסה', `data-id="${id}"`)}${iconBtn('deck-del', ICON.trash, 'מחיקת חפיסה', `data-id="${id}"`)}`,
-      sub: `${dot(d.subjectId)} ${esc(subjectName(d.subjectId))} · ${cards.length} כרטיסיות${cards.length ? ` · ${mastered} בשליטה` : ''}`,
+      sub: esc(subjectName(d.subjectId)),
+      hero: {
+        color: 'teal',
+        nb: d.subjectId ? subjectColor(d.subjectId) : '',
+        chips: [`${ICON.cards} ${cards.length} כרטיסיות`, due ? `${ICON.timer} ${due} לחזור היום` : '', mastered ? `${ICON.check} ${mastered} בשליטה` : ''],
+      },
     })}
     ${
       cards.length
         ? `<div class="card deck-study">
-            ${meter(cards.length ? (mastered / cards.length) * 100 : 0, { label: 'כרטיסיות בשליטה' })}
+            <div class="ds-top">
+              ${ring(pct, `${pct}%`, 'בשליטה', `${pct}% בשליטה`)}
+              <div class="ds-legend">
+                <span><i class="lg-dot l-new"></i>חדשות <b>${cards.length - mastered - learning}</b></span>
+                <span><i class="lg-dot l-learn"></i>בלמידה <b>${learning}</b></span>
+                <span><i class="lg-dot l-done"></i>בשליטה <b>${mastered}</b></span>
+              </div>
+            </div>
             <button class="btn primary block lg" data-act="review-start" data-id="${id}" data-mode="due">${ICON.play} ${due ? `ללמוד עכשיו (${due})` : 'הכל חזר להיום · תרגול נוסף'}</button>
             ${due && due < cards.length ? `<button class="btn ghost block" data-act="review-start" data-id="${id}" data-mode="all">תרגול כל ה-${cards.length}</button>` : ''}
             <label class="toggle-row"><input type="checkbox" data-ui-toggle="reviewReverse" ${S.ui.reviewReverse ? 'checked' : ''}> להציג קודם את התשובה (הפוך)</label>
@@ -109,8 +128,8 @@ export function deckPage(id) {
     ${section(
       'הוספת כרטיסייה',
       `<form class="card add-card" data-form="card" data-id="${id}">
-        <textarea name="front" rows="1" class="autosize" placeholder="מושג / שאלה" aria-label="צד קדמי"></textarea>
-        <textarea name="back" rows="1" class="autosize" placeholder="הגדרה / תשובה" aria-label="צד אחורי"></textarea>
+        <div class="ac-side"><span class="ac-tag">שאלה</span><textarea name="front" rows="1" class="autosize" placeholder="מושג / שאלה" aria-label="צד קדמי"></textarea></div>
+        <div class="ac-side back"><span class="ac-tag">תשובה</span><textarea name="back" rows="1" class="autosize" placeholder="הגדרה / תשובה" aria-label="צד אחורי"></textarea></div>
         <div class="row gap">
           <button class="btn tinted grow" type="submit">${ICON.plus} הוספה</button>
           <button class="btn ghost grow" type="button" data-act="import-open" data-mode="cards" data-deck="${id}">הדבקת רשימה</button>
@@ -120,13 +139,14 @@ export function deckPage(id) {
     ${section(
       `כרטיסיות (${cards.length})`,
       cards.length
-        ? `<div class="card list">${cards
-            .map(
-              (c) => `<button class="card-row" data-act="card-edit" data-id="${c.id}">
+        ? `<div class="card-stack">${cards
+            .map((c) => {
+              const box = Math.min(c.box || 0, MAX_BOX);
+              return `<button class="card-row mini-fc${box >= 4 ? ' known' : ''}" data-act="card-edit" data-id="${c.id}">
                 <span class="cr-front">${esc(c.front)}</span><span class="cr-back">${esc(c.back)}</span>
-                <span class="box-dots" aria-label="רמת שליטה ${c.box || 0} מתוך ${MAX_BOX}">${'●'.repeat(Math.min(c.box || 0, MAX_BOX))}${'○'.repeat(MAX_BOX - Math.min(c.box || 0, MAX_BOX))}</span>
-              </button>`
-            )
+                <span class="box-bars" role="img" aria-label="רמת שליטה ${box} מתוך ${MAX_BOX}">${Array.from({ length: MAX_BOX }, (_, i) => `<i${i < box ? ' class="on"' : ''}></i>`).join('')}</span>
+              </button>`;
+            })
             .join('')}</div>`
         : empty('✍️', 'מוסיפים כרטיסיות אחת-אחת, או מדביקים רשימה של "מושג - הגדרה" (גם מ-Quizlet).')
     )}
@@ -135,7 +155,9 @@ export function deckPage(id) {
 
 export function reviewPage() {
   const r = S.ui.review;
-  if (!r) return `${head('', { back: '#study' })}${empty('🃏', 'אין תרגול פעיל')}`;
+  if (!r) {
+    return `${head('תרגול', { back: '#study', hero: { color: 'teal' } })}${empty('🃏', 'אין תרגול פעיל כרגע. בוחרים חפיסה ולוחצים "ללמוד עכשיו".', `<button class="btn primary" data-go="#study">${ICON.cards} לחפיסות שלי</button>`)}`;
+  }
   const d = deck(r.deckId);
   const done = r.idx >= r.queue.length;
   if (done) {
@@ -144,10 +166,11 @@ export function reviewPage() {
     const pct = total ? Math.round((right / total) * 100) : 0;
     return `
       ${head('', { back: `#deck-${r.deckId}` })}
-      <div class="card review-done">
-        <div class="empty-emoji" aria-hidden="true">${pct >= 80 ? '🏆' : pct >= 50 ? '💪' : '🌱'}</div>
+      <div class="card review-done${pct >= 80 ? ' great' : ''}">
+        <div class="rd-medal" aria-hidden="true">${pct >= 80 ? '🏆' : pct >= 50 ? '💪' : '🌱'}</div>
         <h2>סיימת סבב!</h2>
-        <p>ידעת <b>${right}</b> מתוך <b>${total}</b> בפעם הראשונה (${pct}%)</p>
+        ${ring(pct, `${pct}%`, 'בפעם הראשונה', `${pct}% בפעם הראשונה`)}
+        <p>ידעת <b>${right}</b> מתוך <b>${total}</b> בפעם הראשונה</p>
         ${r.loggedMin ? `<p class="muted small">נרשמו ${fmtMin(r.loggedMin)} לשעות הלמידה</p>` : ''}
         ${right < total ? `<button class="btn primary block" data-act="review-wrong">עוד סבב על מה שלא ידעת (${total - right})</button>` : ''}
         <button class="btn ghost block" data-go="#deck-${r.deckId}">חזרה לחפיסה</button>
@@ -165,8 +188,9 @@ export function reviewPage() {
   const size = shown.length > 160 ? 'sm' : shown.length > 60 ? 'md' : 'lg';
   return `
     ${head('', { back: `#deck-${r.deckId}`, actions: `<span class="head-note">${esc(d?.title || '')}</span>` })}
-    <div class="review-progress"><span class="small muted"><bdi>${r.idx + 1} / ${r.queue.length}</bdi></span>${meter((r.idx / r.queue.length) * 100, { label: 'התקדמות' })}</div>
-    <button class="flashcard${r.flipped ? ' flipped' : ''}" data-act="review-flip" aria-live="polite">
+    <div class="review-progress"><span class="rp-count"><bdi>${r.idx + 1} / ${r.queue.length}</bdi></span>${meter((r.idx / r.queue.length) * 100, { label: 'התקדמות' })}</div>
+    <div class="fc-deck" aria-hidden="true"><i></i><i></i></div>
+    <button class="flashcard${r.flipped ? ' flipped' : ''}" data-act="review-flip" aria-live="polite" style="--fc:${d?.subjectId ? subjectColor(d.subjectId) : 'var(--accent)'}">
       <span class="fc-side">${r.flipped ? 'תשובה' : 'שאלה'}</span>
       <span class="fc-text ${size}">${esc(shown)}</span>
       ${r.flipped ? `<span class="fc-q muted small">${esc(q)}</span>` : `<span class="fc-hint muted small">לחיצה כדי להפוך</span>`}

@@ -504,7 +504,7 @@ export function gradeForm(presetSubject = '') {
       { name: 'weight', label: 'משקל % (לא חובה)', type: 'number', inputmode: 'decimal', min: 0, max: 100, half: true, placeholder: 'רגיל' },
       { name: 'title', label: 'על מה?', placeholder: 'למשל: מבחן בפונקציות' },
       { name: 'type', label: 'סוג', type: 'select', options: EXAM_TYPES.map((t) => ({ value: t, label: t })), half: true },
-      { name: 'date', label: 'תאריך', type: 'date', required: true, half: true },
+      { name: 'date', label: 'תאריך', type: 'date', required: true, quick: 'past' },
     ],
     submitLabel: 'הוספה',
     onSubmit(v) {
@@ -530,7 +530,7 @@ function attendanceForm() {
     values: { kind: 'absent', date: isoDate(), subjectId: '' },
     fields: [
       { name: 'kind', label: 'מה', type: 'select', options: [{ value: 'absent', label: 'חיסור' }, { value: 'late', label: 'איחור' }, { value: 'excused', label: 'חיסור מוצדק' }], half: true },
-      { name: 'date', label: 'תאריך', type: 'date', required: true, half: true },
+      { name: 'date', label: 'תאריך', type: 'date', required: true, quick: 'past' },
       { name: 'subjectId', label: 'מקצוע', type: 'subject' },
     ],
     submitLabel: 'שמירה',

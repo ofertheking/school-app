@@ -70,10 +70,23 @@ const EMPTY_ICON = {
   '🏆': 'cards', '💪': 'cards', '🌱': 'cards', '📈': 'chart',
 };
 
-export const empty = (emoji, text, cta = '') => {
-  const ico = ICON[EMPTY_ICON[emoji] || emoji];
-  return `<div class="empty">${ico ? `<div class="empty-ico" aria-hidden="true">${ico}</div>` : `<div class="empty-emoji" aria-hidden="true">${emoji}</div>`}<p>${text}</p>${cta}</div>`;
+// Each kind of empty screen gets its own colour, like the app's banners.
+const EMPTY_COLOR = {
+  exam: 'red', calendar: 'teal', tasks: 'orange', timer: 'purple', book: 'green', search: 'blue', cards: 'teal',
+  edit: 'pink', camera: 'green', chart: 'indigo', note: 'yellow', clip: 'blue', grad: 'indigo',
 };
+
+export const empty = (emoji, text, cta = '') => {
+  const name = EMPTY_ICON[emoji] || emoji;
+  const ico = ICON[name];
+  return `<div class="empty">${
+    ico
+      ? `<div class="empty-ico e-${EMPTY_COLOR[name] || 'blue'}" aria-hidden="true"><i class="eb eb1"></i><i class="eb eb2"></i><i class="eb eb3"></i><span class="ei-tile">${ico}</span></div>`
+      : `<div class="empty-emoji" aria-hidden="true">${emoji}</div>`
+  }<p>${text}</p>${cta}</div>`;
+};
+
+export { seedOf };
 
 /** Settings-style coloured icon tile. */
 export const tile = (icon, color = 'blue', cls = '') => `<span class="tile-ico t-${color}${cls ? ` ${cls}` : ''}" aria-hidden="true">${ICON[icon] || icon}</span>`;

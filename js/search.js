@@ -1,8 +1,8 @@
 // Spotlight-style search across everything in the app.
-import { S, subjectName, itemKind } from './core.js';
-import { esc, fmtDate, norm } from './util.js';
+import { S, subjectName, itemKind, upcomingExams, openTasks } from './core.js';
+import { esc, fmtDate, norm, relDay } from './util.js';
 import { ICON } from './icons.js';
-import { head, empty, tile } from './components.js';
+import { head, empty, tile, bannerArt } from './components.js';
 import { DAY_NAMES } from './schedule.js';
 
 /** Escape, then wrap matches of q in <mark>. */
@@ -38,9 +38,7 @@ const row = (attrs, icon, color, title, sub) => `<button class="row-btn search-r
 export function searchResults(raw) {
   const qRaw = String(raw || '').trim();
   const q = norm(qRaw);
-  if (!q) {
-    return empty('search', 'מחפשים בכל מקום: מבחנים, משימות, סיכומים, דפי מחברת, כרטיסיות, מקצועות ושיעורים.');
-  }
+  if (!q) return browse();
   const d = S.data;
   const LIMIT = 8;
   const out = [];
@@ -95,12 +93,41 @@ export function searchResults(raw) {
   return html || empty('search', `לא נמצא שום דבר עבור "${esc(qRaw)}"`);
 }
 
+// Nothing typed yet: jump tiles, your subjects, and what's coming up.
+const JUMPS = [
+  ['#exams', 'exam', 'red', 'מבחנים'], ['#tasks', 'tasks', 'orange', 'משימות'], ['#grades', 'chart', 'indigo', 'ציונים'],
+  ['#library', 'book', 'green', 'חומר'], ['#schedule', 'calendar', 'teal', 'מערכת'], ['#study', 'cards', 'purple', 'למידה'],
+];
+
+function browse() {
+  const subs = S.data.subjects;
+  const soon = [
+    ...upcomingExams().slice(0, 3).map((e) => row(`data-go="#exam-${e.id}"`, 'exam', 'red', esc(e.title || e.type), `${esc(subjectName(e.subjectId))} · ${relDay(e.date)}`)),
+    ...openTasks().filter((t) => t.due).slice(0, 2).map((t) => row(`data-go="#task-${t.id}"`, 'tasks', 'orange', esc(t.title), `${esc(subjectName(t.subjectId))} · ${relDay(t.due)}`)),
+  ];
+  const recent = [...S.data.items]
+    .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+    .slice(0, 3)
+    .map((it) => row(`data-go="#item-${it.id}"`, 'note', 'green', esc(it.title || 'ללא כותרת'), esc(subjectName(it.subjectId))));
+  return `
+    <div class="jump-grid">${JUMPS.map(([go, icon, color, label]) => `<button class="jump j-${color}" data-go="${go}"><span class="jump-ico" aria-hidden="true">${ICON[icon]}</span><b>${label}</b></button>`).join('')}</div>
+    ${subs.length ? `<h3 class="group-title">המקצועות שלי</h3><div class="chip-wrap">${subs.map((x) => `<button class="chip-btn" data-go="#subject-${x.id}"><span class="dot" style="background:var(--c${x.color % 8})"></span>${esc(x.name)}</button>`).join('')}</div>` : ''}
+    ${soon.length ? `<h3 class="group-title">בקרוב</h3><div class="card list">${soon.join('')}</div>` : ''}
+    ${recent.length ? `<h3 class="group-title">נערך לאחרונה</h3><div class="card list">${recent.join('')}</div>` : ''}
+    ${!soon.length && !recent.length ? empty('search', 'מחפשים בכל מקום: מבחנים, משימות, סיכומים, דפי מחברת, כרטיסיות, מקצועות ושיעורים.') : ''}`;
+}
+
 export function searchPage() {
   return `
-    ${head('חיפוש', { back: '#home' })}
-    <label class="search big"><span aria-hidden="true">${ICON.search}</span>
-      <input type="search" enterkeyhint="search" placeholder="מבחנים, סיכומים, כרטיסיות…" value="${esc(S.ui.q)}" data-input="global-search" aria-label="חיפוש">
-    </label>
+    ${head('', { back: '#home', navTitle: 'חיפוש' })}
+    <header class="page-hero h-blue search-hero">${bannerArt(3)}
+      <div class="ph-text">
+        <h1 class="large-title">חיפוש</h1>
+        <label class="search glass-search"><span aria-hidden="true">${ICON.search}</span>
+          <input type="search" enterkeyhint="search" placeholder="מבחנים, סיכומים, כרטיסיות…" value="${esc(S.ui.q)}" data-input="global-search" aria-label="חיפוש">
+        </label>
+      </div>
+    </header>
     <div id="search-results">${searchResults(S.ui.q)}</div>
   `;
 }

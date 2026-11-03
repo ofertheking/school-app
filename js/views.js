@@ -13,7 +13,7 @@ import { weekChart, subjectBars, meter, ring } from './charts.js';
 import { ICON } from './icons.js';
 import { getToken, redirectURI, connectedEmail } from './integrations.js';
 import { storageMode } from './store.js';
-import { head, iconBtn, section, empty, seg, dot, subjectChip, tile } from './components.js';
+import { head, iconBtn, section, empty, seg, dot, subjectChip, tile, bannerArt, seedOf } from './components.js';
 import { gradesView, gradesHomeCard } from './grades.js';
 import { notesBody, notesHomeSection } from './notes.js';
 import { calendarView } from './calendar.js';
@@ -109,6 +109,26 @@ function timerBanner() {
     <span>${t.startedAt ? 'לומדים עכשיו' : 'מושהה'}: ${esc(subjectName(t.subjectId))}${ex ? ` · ${esc(ex.title)}` : ''}</span>
     <b class="ltr" data-timer>${fmtClock(timerShown(t))}</b>
   </button>`;
+}
+
+/** How full the timer dial is: pomodoro drains, the stopwatch fills once an hour. */
+export function dialFrac(t = S.data.timer, mode = t?.mode) {
+  if (!t) return mode === 'pomodoro' ? 1 : 0;
+  const el = timerElapsed(t);
+  return t.mode === 'pomodoro' ? Math.max(0, 1 - el / (t.targetMin * 60000)) : (el % 3600000) / 3600000;
+}
+const DIAL_C = 2 * Math.PI * 45;
+export const dialDash = (f) => `${(f * DIAL_C).toFixed(1)} ${DIAL_C.toFixed(1)}`;
+
+function timerDial(frac, inner, color, cls = '') {
+  return `<div class="dial${cls}" style="--dc:${color}">
+    <svg viewBox="0 0 100 100" aria-hidden="true">
+      <circle cx="50" cy="50" r="45" class="dial-track"/>
+      <circle cx="50" cy="50" r="38.5" class="dial-ticks"/>
+      <circle cx="50" cy="50" r="45" class="dial-fill" data-dial stroke-dasharray="${dialDash(frac)}" transform="rotate(-90 50 50)"${frac < 0.003 ? ' style="opacity:0"' : ''}/>
+    </svg>
+    <div class="dial-in">${inner}</div>
+  </div>`;
 }
 
 export function timerShown(t = S.data.timer) {
@@ -383,7 +403,17 @@ export function examDetail(id) {
         ],
       },
     })}
-    <div class="card countdown ${n >= 0 ? examUrgency(e) : 'past'}">${big}</div>
+    <div class="card countdown ${n >= 0 && !e.done ? examUrgency(e) : 'past'}${!past && (r != null || studied) ? ' cd-split' : ''}">
+      <div class="cd-main">${big}</div>
+      ${
+        !past && (r != null || studied)
+          ? `<div class="cd-side">
+              ${r != null ? `<div class="cd-ring">${ring(r, `${r}%`, 'מוכנות', `${r}% מוכנות`)}</div>` : ''}
+              <div class="cd-stat"><b>${studied ? esc(fmtMin(studied)) : '0'}</b><span>${studied ? 'למדת למבחן' : 'דקות למידה'}</span></div>
+            </div>`
+          : ''
+      }
+    </div>
 
     ${past ? paper : ''}
     ${material}
@@ -555,8 +585,13 @@ export function study() {
     const ex = t.examId ? exam(t.examId) : null;
     timerCard = `<div class="card timer-card running${t.startedAt ? '' : ' paused'}">
       <div class="timer-sub">${dot(t.subjectId)} ${esc(subjectName(t.subjectId))}${ex ? ` · ${esc(ex.title)}` : ''}</div>
-      <div class="timer-clock ltr" data-timer>${fmtClock(timerShown(t))}</div>
-      <div class="muted small">${t.mode === 'pomodoro' ? `פומודורו ${t.targetMin} דקות` : 'סטופר'}${t.startedAt ? '' : ' · מושהה'}</div>
+      ${timerDial(
+        dialFrac(t),
+        `<div class="timer-clock ltr" data-timer>${fmtClock(timerShown(t))}</div>
+         <div class="dial-mode">${t.mode === 'pomodoro' ? `פומודורו ${t.targetMin}′` : 'סטופר'}${t.startedAt ? '' : ' · מושהה'}</div>`,
+        t.subjectId ? subjectColor(t.subjectId) : 'var(--accent)',
+        t.startedAt ? ' live' : ''
+      )}
       <div class="timer-btns">
         ${t.startedAt
           ? `<button class="btn round" data-act="timer-pause" aria-label="השהיה">${ICON.pause}</button>`
@@ -574,7 +609,12 @@ export function study() {
         <button class="chip-btn${!sel ? ' on' : ''}" data-act="timer-subject" data-id="">כללי</button>
       </div>
       ${seg('timerMode', [['stopwatch', 'סטופר'], ['pomodoro', `פומודורו ${S.data.settings.pomodoroMin}′`]])}
-      <div class="timer-clock ltr idle">${S.ui.timerMode === 'pomodoro' ? `${S.data.settings.pomodoroMin}:00` : '00:00'}</div>
+      ${timerDial(
+        S.ui.timerMode === 'pomodoro' ? 1 : 0,
+        `<div class="timer-clock ltr idle">${S.ui.timerMode === 'pomodoro' ? `${S.data.settings.pomodoroMin}:00` : '00:00'}</div>
+         <div class="dial-mode">מוכנים?</div>`,
+        sel ? subjectColor(sel) : 'var(--accent)'
+      )}
       <button class="btn primary block lg" data-act="timer-start">${ICON.play} התחלת למידה</button>
     </div>`;
   }
@@ -706,6 +746,8 @@ export function library() {
   `;
 }
 
+const KIND_LABEL = { note: 'סיכום', lesson: 'סיכום שיעור', notebook: 'דף מחברת', file: 'קובץ', link: 'קישור' };
+
 export function itemDetail(id) {
   const it = item(id);
   if (!it) return notFound('#library');
@@ -718,14 +760,19 @@ export function itemDetail(id) {
                 ${iconBtn('del-item', ICON.trash, 'מחיקה', `data-id="${it.id}"`)}`,
     })}
     <div class="editor">
-      <input class="editor-title" data-bind="item:${it.id}:title" value="${esc(it.title)}" placeholder="כותרת (למשל: סיכום פרק 3 — מלחמת העצמאות)" aria-label="כותרת">
-      <div class="row gap">
-        <label class="mini-field">${dot(it.subjectId)}
-          <select data-bind="item:${it.id}:subjectId" aria-label="מקצוע">${S.data.subjects
-            .map((s) => `<option value="${s.id}"${s.id === it.subjectId ? ' selected' : ''}>${esc(s.name)}</option>`)
-            .join('')}<option value=""${!it.subjectId ? ' selected' : ''}>כללי</option></select>
-        </label>
-        <span class="muted small">עודכן ${fmtDateTime(it.updatedAt || it.createdAt)}</span>
+      <div class="doc-hero" style="--nb:${it.subjectId ? subjectColor(it.subjectId) : 'var(--c-none)'}">${bannerArt(seedOf(it.id))}
+        <div class="dh-in">
+          <span class="dh-kind">${KIND_ICON[itemKind(it)] || ICON.note} ${KIND_LABEL[itemKind(it)] || 'סיכום'}</span>
+          <input class="editor-title" data-bind="item:${it.id}:title" value="${esc(it.title)}" placeholder="כותרת (למשל: סיכום פרק 3 — מלחמת העצמאות)" aria-label="כותרת">
+          <div class="dh-meta">
+            <label class="mini-field glass"><span class="dot" aria-hidden="true"></span>
+              <select data-bind="item:${it.id}:subjectId" aria-label="מקצוע">${S.data.subjects
+                .map((s) => `<option value="${s.id}"${s.id === it.subjectId ? ' selected' : ''}>${esc(s.name)}</option>`)
+                .join('')}<option value=""${!it.subjectId ? ' selected' : ''}>כללי</option></select>
+            </label>
+            <span class="dh-time">עודכן ${fmtDateTime(it.updatedAt || it.createdAt)}</span>
+          </div>
+        </div>
       </div>
       <label class="url-field"><span aria-hidden="true">${ICON.link}</span>
         <input type="url" inputmode="url" data-bind="item:${it.id}:url" value="${esc(it.url || '')}" placeholder="קישור (Drive, YouTube, אתר…)" aria-label="קישור">

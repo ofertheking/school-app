@@ -292,12 +292,28 @@ const D = {
   '20 כרטיסיות בשליטה': '20 flashcards mastered', 'צלם/ת המחברת': 'Notebook photographer', '10 דפי מחברת': '10 notebook pages',
   'כותב/ת': 'Writer', '5 פתקים': '5 notes',
   'חזרה': 'Back', 'מצב': 'Status', 'לחיצה משנה': 'tap to change', 'הכי גבוה': 'Highest', 'שבוע': 'Week',
+
+  // ---- forms, flashcards, search, timer (new look)
+  'מוכנים?': 'Ready?', 'דקות למידה': 'minutes studied', 'למדת למבחן': 'studied for it', 'מוכנות': 'ready',
+  'מערכת': 'Timetable', 'בקרוב': 'Coming up', 'נערך לאחרונה': 'Recently edited',
+  'חדשות': 'New', 'בלמידה': 'Learning', 'בשליטה': 'Mastered', 'שאלה': 'Question', 'תשובה': 'Answer',
+  'צד קדמי': 'Front side', 'צד אחורי': 'Back side', 'תרגול': 'Practice', 'לחפיסות שלי': 'My decks',
+  'אין תרגול פעיל כרגע. בוחרים חפיסה ולוחצים "ללמוד עכשיו".': 'No practice running. Pick a deck and tap “Study now”.',
+  'כותרת (למשל: סיכום פרק 3 — מלחמת העצמאות)': 'Title (e.g. Chapter 3 summary)', 'קישור': 'Link',
+  'בעוד שבועיים': 'In 2 weeks', 'לפני שבוע': 'A week ago', 'ניקוי': 'Clear', 'התקדמות': 'Progress', 'להסיר': 'Remove',
+  'בפעם הראשונה': 'first time', 'דף מחברת': 'Notebook page', 'מה צריך לעשות?': 'What needs doing?',
 };
 
 export const EN = new Map(Object.entries(D));
 
 // Strings built from numbers / names at runtime. (regex body, replacement)
 export const EN_PATTERNS = [
+  ['(\\d+) לחזור היום', '$1 due today'],
+  ['(\\d+)% בשליטה', '$1% mastered'],
+  ['(\\d+)% בפעם הראשונה', '$1% first time'],
+  ['(\\d+)% מוכנות', '$1% ready'],
+  ['(\\d+) בשליטה', '$1 mastered'],
+  ['רמת שליטה (\\d+) מתוך (\\d+)', 'Level $1 of $2'],
   ['בעוד (\\d+) ימים', 'In $1 days'],
   ['לפני (\\d+) ימים', '$1 days ago'],
   ['(\\d+) ימים', '$1 days'],

@@ -213,6 +213,12 @@ setInterval(() => {
   if (!t) return;
   const txt = fmtClock(V.timerShown(t));
   document.querySelectorAll('[data-timer]').forEach((el) => (el.textContent = txt));
+  const frac = V.dialFrac(t);
+  const dash = V.dialDash(frac);
+  document.querySelectorAll('[data-dial]').forEach((el) => {
+    el.setAttribute('stroke-dasharray', dash);
+    el.style.opacity = frac < 0.003 ? '0' : '';
+  });
   if (t.mode === 'pomodoro' && t.startedAt && !t.alerted && timerElapsed(t) >= t.targetMin * 60000) {
     t.alerted = true;
     save();
@@ -232,11 +238,11 @@ function examForm(e, presetSubject, presetDate = '') {
       { name: 'subjectId', label: 'מקצוע', type: 'subject' },
       { name: 'title', label: 'נושא / שם', placeholder: 'למשל: טריגונומטריה, פרקים 1–4' },
       { name: 'type', label: 'סוג', type: 'select', options: EXAM_TYPES.map((t) => ({ value: t, label: t })), half: true },
-      { name: 'date', label: 'תאריך', type: 'date', required: true, half: true },
+      { name: 'date', label: 'תאריך', type: 'date', required: true, half: true, quick: 'exam' },
       { name: 'time', label: 'שעה (לא חובה)', type: 'time', half: true },
       ...(isNew
         ? [
-            { name: 'grade', label: 'ציון (אם המבחן כבר היה)', type: 'number', inputmode: 'decimal', min: 0, max: 100, half: true, placeholder: '—' },
+            { name: 'grade', label: 'ציון (אם המבחן כבר היה)', type: 'number', inputmode: 'decimal', min: 0, max: 100, placeholder: '—' },
             { name: 'topics', label: 'החומר למבחן — שורה לכל נושא', type: 'textarea', rows: 4, placeholder: 'פונקציות\nנגזרות\nתרגילים מהחוברת עמ׳ 20–35' },
             { name: 'files', label: 'דף חומר / PDF / צילומים (לא חובה)', type: 'files', accept: 'image/*,application/pdf,.doc,.docx,.ppt,.pptx' },
           ]
@@ -280,7 +286,7 @@ function taskForm(t, presetSubject, presetDue = '') {
     fields: [
       { name: 'title', label: 'מה צריך לעשות?', required: true, placeholder: 'למשל: תרגילים 1–10 עמ׳ 45' },
       { name: 'subjectId', label: 'מקצוע', type: 'subject' },
-      { name: 'due', label: 'עד מתי?', type: 'date', half: true },
+      { name: 'due', label: 'עד מתי?', type: 'date', half: true, quick: 'task' },
       { name: 'grade', label: 'ציון (אם כבר קיבלת)', type: 'number', inputmode: 'decimal', min: 0, max: 100, half: true, placeholder: '—' },
       { name: 'notes', label: 'הערות', type: 'textarea', rows: 3 },
       ...(isNew
@@ -326,7 +332,7 @@ function sessionForm(s) {
     values: vals,
     fields: [
       { name: 'subjectId', label: 'מקצוע', type: 'subject' },
-      { name: 'date', label: 'תאריך', type: 'date', required: true, half: true },
+      { name: 'date', label: 'תאריך', type: 'date', required: true, half: true, quick: 'past' },
       { name: 'minutes', label: 'כמה דקות?', type: 'number', inputmode: 'numeric', min: 1, max: 1440, required: true, half: true, placeholder: '45' },
       { name: 'note', label: 'מה למדת? (לא חובה)', placeholder: 'למשל: חזרה על פרק 2' },
     ],
@@ -421,7 +427,7 @@ function lessonNoteForm(presetSubject) {
     values: { subjectId: presetSubject || S.ui.libSubject || '', date: isoDate() },
     fields: [
       { name: 'subjectId', label: 'מקצוע', type: 'subject' },
-      { name: 'date', label: 'תאריך השיעור', type: 'date', required: true },
+      { name: 'date', label: 'תאריך השיעור', type: 'date', required: true, quick: 'past' },
     ],
     onSubmit(v) {
       setTimeout(() => newLessonNote(v.subjectId, v.date), 280);
