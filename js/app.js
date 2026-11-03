@@ -27,6 +27,7 @@ import * as Recover from './recover.js';
 import * as Board from './examBoard.js';
 import * as Grades from './grades.js';
 import * as Notes from './notes.js';
+import * as Bridge from './bridge.js';
 import { applyAppearance } from './appearance.js';
 import { startTranslating, setLang } from './i18n.js';
 import { ICON } from './icons.js';
@@ -504,7 +505,7 @@ function webtopSheet(preset, prefill = '') {
   openSheet(
     `<div class="sheet-head"><button type="button" class="link-btn" data-close>סגירה</button><h3>ייבוא מוובטופ</h3><span></span></div>
      <ol class="steps small muted">
-       <li>בוובטופ פותחים את <b>הציונים</b>, <b>לוח המבחנים</b> או <b>שיעורי הבית</b></li>
+       <li>הכי קל: <button class="link-btn inline" data-act="bridge-open">הסימנייה "ייבוא" בספארי</button> מעתיקה את הדף בלחיצה אחת. או ידנית: בוובטופ פותחים את <b>הציונים</b>, <b>לוח המבחנים</b> או <b>שיעורי הבית</b></li>
        <li>לחיצה ארוכה על טקסט ← <b>"בחר הכל"</b> ← <b>"העתק"</b></li>
        <li>חוזרים לכאן ולוחצים <b>הדבקה</b> — מה שהודבק מזוהה לבד</li>
      </ol>
@@ -514,6 +515,7 @@ function webtopSheet(preset, prefill = '') {
        <button class="btn ghost grow" data-paste>הדבקה</button>
        <button class="btn tinted grow" data-parse>זיהוי</button>
      </div>
+     <p class="import-from muted small" hidden></p>
      <div class="import-out"></div>`,
     {
       tall: true,
@@ -524,10 +526,24 @@ function webtopSheet(preset, prefill = '') {
           as = k;
           sheet.querySelectorAll('[data-as]').forEach((x) => x.classList.toggle('on', x.dataset.as === k));
         };
+        const from = sheet.querySelector('.import-from');
         const parse = () => {
-          const text = box.value;
+          let text = box.value;
+          // Copied with the browser bookmark: we know which page it came from.
+          const br = Bridge.parseBridge(text);
+          if (br) {
+            if (br.kind === 'timetable') {
+              close();
+              setTimeout(() => Sched.importTimetablePdf(null, br.timetable), 280);
+              return;
+            }
+            text = br.body;
+            if (text !== lastText && br.kind) setAs(br.kind);
+            from.hidden = false;
+            from.textContent = `מהדף: ${br.title || br.where}`;
+          } else from.hidden = true;
           // New text: guess what it is (grades pages mention "ציון" and carry 0–100 numbers).
-          if (text !== lastText && Grades.looksLikeGrades(text) && Grades.parseGradesText(text).length >= parseScheduleText(text).length / 2) setAs('grade');
+          if (!br && text !== lastText && Grades.looksLikeGrades(text) && Grades.parseGradesText(text).length >= parseScheduleText(text).length / 2) setAs('grade');
           lastText = text;
           rows = (as === 'grade' ? Grades.parseGradesText(text) : parseScheduleText(text)).map((r) => ({ ...r, on: true }));
           out.innerHTML = rows.length
@@ -1044,7 +1060,7 @@ const ACTIONS = {
   },
 };
 
-Object.assign(ACTIONS, Sched.actions, Cards.actions, Importer.actions, Webtop.actions, Files.actions, Notebooks.actions, Search.actions, Calendar.actions, Recover.actions, Grades.actions, Notes.actions, {
+Object.assign(ACTIONS, Sched.actions, Cards.actions, Importer.actions, Webtop.actions, Files.actions, Notebooks.actions, Search.actions, Calendar.actions, Recover.actions, Grades.actions, Notes.actions, Bridge.actions, {
   'exam-link-items'({ id }) {
     const e = exam(id);
     const chosen = new Set(e.itemIds || []);

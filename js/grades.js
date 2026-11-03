@@ -12,6 +12,7 @@ import { head, iconBtn, empty, section, seg, dot } from './components.js';
 import { formSheet, askConfirm, toast, closeAllSheets } from './ui.js';
 import { rerender } from './router.js';
 import { matchSubject, typeOf } from './examBoard.js';
+import { normalizeDates } from './integrations.js';
 
 const SEMS = [['all', 'שנתי'], ['a', 'מחצית א׳'], ['b', 'מחצית ב׳']];
 const semLabel = (k) => SEMS.find((x) => x[0] === k)?.[1] || '';
@@ -437,6 +438,7 @@ const TYPE_ONLY = /^(מבחן|בוחן|מבדק|בגרות|מתכונת|עבוד
 
 /** Text copied from Webtop's grades page → [{ date, subjectId, title, type, grade, weight }]. */
 export function parseGradesText(text) {
+  text = normalizeDates(text);
   // Average / report-card lines are never grades — drop them before grouping.
   const lines = String(text || '').split(/\r?\n/).map((l) => l.replace(/[ \u00a0]+/g, ' ').trim()).filter((l) => l && !SKIP.test(l));
   const recs = [];

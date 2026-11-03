@@ -180,21 +180,23 @@ const pdfButton = (cls, label) =>
   `<label class="${cls}" aria-label="ייבוא מערכת מ-PDF">${label}<input type="file" accept="application/pdf,.pdf" data-sched-pdf hidden></label>`;
 
 /** Read a timetable PDF, show an editable preview, then save. */
-export async function importTimetablePdf(file) {
-  if (!file) return;
-  const close = openSheet(`<div class="progress-sheet"><div class="spinner" aria-hidden="true"></div><p>קורא את המערכת מה-PDF…</p></div>`);
-  let res;
-  try {
-    res = await parseTimetablePdf(file);
-  } catch (e) {
+export async function importTimetablePdf(file, preParsed = null) {
+  if (!file && !preParsed) return;
+  let res = preParsed;
+  if (!res) {
+    const close = openSheet(`<div class="progress-sheet"><div class="spinner" aria-hidden="true"></div><p>קורא את המערכת מה-PDF…</p></div>`);
+    try {
+      res = await parseTimetablePdf(file);
+    } catch (e) {
+      close();
+      toast('לא הצלחתי לפתוח את הקובץ. בטוח שזה PDF?', 6000);
+      return;
+    }
     close();
-    toast('לא הצלחתי לפתוח את הקובץ. בטוח שזה PDF?', 6000);
-    return;
   }
-  close();
   if (!res.lessons.length) {
     // Picked the exam board (לוח מבחנים) by mistake? Import it as exams instead.
-    try {
+    if (file) try {
       const { parseExamBoardPdf, importExamBoard } = await import('./examBoard.js');
       const board = await parseExamBoardPdf(file);
       if (board.columns.some((c) => c.events.length >= 3)) {

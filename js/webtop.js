@@ -266,13 +266,14 @@ export function webtopRows() {
   const chev = `<span class="chev">${ICON.fwd}</span>`;
   const t = (inner, color) => `<span class="tile-ico t-${color}" aria-hidden="true">${inner}</span>`;
   return `<div class="card list">
+    <button class="row-btn bridge-row" data-act="bridge-open">${t(ICON.ext, 'indigo')}<span class="grow"><b>וובטופ ו-Classroom דרך הדפדפן</b><span class="sr-sub">נכנסים רגיל בספארי, וסימנייה אחת מעתיקה ציונים, מבחנים, שיעורי בית ומערכת</span></span>${chev}</button>
     <button class="row-btn" data-go="#schedule">${t(ICON.calendar, 'green')}<span class="grow">ייבוא מערכת שעות מ-PDF<span class="sr-sub">הדרך המומלצת — עובד מצוין עם הקובץ של וובטופ</span></span>${chev}</button>
     <label class="row-btn">${t(ICON.exam, 'red')}<span class="grow">ייבוא לוח מבחנים מ-PDF<span class="sr-sub">רק המבחנים של השכבה והמקצועות שלך</span></span>${chev}<input type="file" accept="application/pdf,.pdf" data-board-pdf hidden></label>
     <button class="row-btn" data-act="webtop-paste">${t(ICON.tasks, 'orange')}<span class="grow">ייבוא בהעתק-הדבק<span class="sr-sub">ציונים, מבחנים ושיעורי בית מוובטופ</span></span>${chev}</button>
     <label class="row-btn">${t(ICON.calendar, 'blue')}<span class="grow">ייבוא מקובץ יומן (‎.ics)<span class="sr-sub">מטלות Classroom מיומן גוגל, או כל יומן אחר</span></span>${chev}<input type="file" accept=".ics,text/calendar" data-ics hidden></label>
     <a class="row-btn" href="https://webtop.smartschool.co.il/" target="_blank" rel="noopener">${t(ICON.ext, 'gray')}<span class="grow">פתיחת וובטופ</span>${chev}</a>
   </div>
-  <p class="card-foot">חיבור אוטומטי לוובטופ לא אפשרי: השרתים של וובטופ חוסמים כל בקשה שלא מגיעה מהדפדפן עצמו. לכן מייבאים את המערכת מקובץ PDF (מצוין!) ואת המבחנים בהעתק-הדבק.</p>
+  <p class="card-foot">וובטופ לא מאפשר לשרתים להתחבר בשמך, אז הכל עובר דרך הדפדפן שלך: נכנסים רגיל, והסימנייה מעתיקה את מה שעל המסך. אפשר גם קובצי PDF והעתק-הדבק.</p>
   ${
     connected
       ? `<div class="card list"><button class="row-btn" data-act="webtop-setup">${t('<b class="tile-letter">W</b>', 'gray')}<span class="grow">חיבור וובטופ ישן<span class="sr-sub">כנראה חסום · אפשר לנתק</span></span>${chev}</button>

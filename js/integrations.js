@@ -344,9 +344,40 @@ export function icsToLines(text) {
   return out;
 }
 
+const DUE_WORDS = /(תאריך יעד|מועד הגשה|תאריך הגשה|להגשה|due date|due)\s*:?/gi;
+
+// Month names (Hebrew and English) as written by Classroom and calendars → month number.
+const MONTHS_HE = [['ינו', 1], ['פבר', 2], ['מרץ', 3], ['מרס', 3], ['אפר', 4], ['מאי', 5], ['יונ', 6], ['יול', 7], ['אוג', 8], ['ספט', 9], ['אוק', 10], ['נוב', 11], ['דצמ', 12]];
+const MONTHS_EN = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+const p2d = (n) => String(n).padStart(2, '0');
+
+/**
+ * "5 בנוב׳", "5 בנובמבר 2026", "Nov 5", "5 Nov", "Due tomorrow", "תאריך יעד: מחר"
+ * → "05/11" style dates the line parser understands.
+ */
+export function normalizeDates(text) {
+  const today = new Date();
+  const rel = (w) => {
+    const d = new Date(today);
+    if (/tomorrow|מחר/i.test(w)) d.setDate(d.getDate() + 1);
+    return `${p2d(d.getDate())}/${p2d(d.getMonth() + 1)}/${d.getFullYear()}`;
+  };
+  return String(text || '')
+    .replace(/(due|תאריך יעד|מועד הגשה|להגשה|עד)\s*:?\s*(today|tomorrow|היום|מחר)(?![א-ת])/gi, (m, a, w) => `${a} ${rel(w)}`)
+    .replace(/(\d{1,2})\s*(?:ב|ל)?(ינו|פבר|מרץ|מרס|אפר|מאי|יונ|יול|אוג|ספט|אוק|נוב|דצמ)[א-ת]*['׳]?(?:\s*,?\s*(\d{4}))?/g, (m, d, mo, y) => {
+      const n = MONTHS_HE.find(([k]) => k === mo)?.[1];
+      return n ? `${p2d(d)}/${p2d(n)}${y ? `/${y}` : ''}` : m;
+    })
+    .replace(/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{1,2})(?:st|nd|rd|th)?(?:,?\s*(\d{4}))?\b/gi, (m, mo, d, y) =>
+      `${p2d(d)}/${p2d(MONTHS_EN.indexOf(mo.toLowerCase()) + 1)}${y ? `/${y}` : ''}`)
+    .replace(/\b(\d{1,2})\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?(?:,?\s*(\d{4}))?\b/gi, (m, d, mo, y) =>
+      `${p2d(d)}/${p2d(MONTHS_EN.indexOf(mo.toLowerCase()) + 1)}${y ? `/${y}` : ''}`);
+}
+
 export function parseScheduleText(text) {
-  const lines = String(text || '').split(/\r?\n/).map((l) => l.trim());
+  const lines = normalizeDates(text).split(/\r?\n/).map((l) => l.trim());
   const rows = [];
+  let lastDateLine = -1;
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     let m = null;
@@ -357,17 +388,31 @@ export function parseScheduleText(text) {
     }
     if (!date) continue;
     const time = (line.match(/\b(\d{1,2}:\d{2})\b/) || [])[1] || '';
-    let rest = cleanText(line.replace(m[0], ' '));
-    // Table copied cell-per-line: borrow following lines until the next date.
+    // "תאריך יעד:" / "Due" are labels, not the title.
+    let rest = cleanText(line.replace(m[0], ' ').replace(DUE_WORDS, ' '));
     if (rest.replace(/[^\p{L}]/gu, '').length < 2) {
-      const extra = [];
-      for (let j = i + 1; j < lines.length && extra.length < 3; j++) {
-        if (DATE_RE.test(lines[j])) break;
-        const c = cleanText(lines[j]);
-        if (c) extra.push(c);
+      // A due-date line under its item (Classroom to-do): the title is in the lines above.
+      const before = [];
+      if (DUE_WORDS.test(line)) {
+        for (let j = i - 1; j >= 0 && j > lastDateLine && before.length < 3; j--) {
+          const c = cleanText(lines[j]);
+          if (c) before.unshift(c);
+        }
       }
-      rest = extra.join(' · ');
+      DUE_WORDS.lastIndex = 0;
+      if (before.length) rest = before.join(' · ');
+      else {
+        // Table copied cell-per-line: borrow following lines until the next date.
+        const extra = [];
+        for (let j = i + 1; j < lines.length && extra.length < 3; j++) {
+          if (DATE_RE.test(lines[j])) break;
+          const c = cleanText(lines[j]);
+          if (c) extra.push(c);
+        }
+        rest = extra.join(' · ');
+      }
     }
+    lastDateLine = i;
     if (!rest) continue;
     const subj = guessSubject(rest);
     let title = rest;

@@ -246,6 +246,52 @@ export function parseTimetableItems(rawItems) {
   return { lessons, reversed, days: cols.length, rows: rows.length, reason: lessons.length ? '' : 'empty' };
 }
 
+/**
+ * A timetable copied as a table (rows of tab-separated cells; lines inside one
+ * cell joined by " | "), e.g. from Webtop's timetable page in the browser.
+ * Same result shape as parseTimetableItems.
+ */
+export function parseTimetableTable(text) {
+  const rows = String(text || '').split(/\r?\n/).map((l) => l.split('\t').map((c) => c.trim()));
+  let header = -1;
+  let cols = [];
+  rows.forEach((r, i) => {
+    const days = r.map((c, j) => [j, dayOf(c)]).filter(([, d]) => d != null);
+    if (days.length >= 3 && days.length > cols.length) {
+      header = i;
+      cols = days;
+    }
+  });
+  if (header === -1) return { lessons: [], reversed: false, days: 0, rows: 0, reason: 'no-days' };
+  const lessons = [];
+  let n = 0;
+  for (const r of rows.slice(header + 1)) {
+    if (!r.some(Boolean)) continue;
+    if (cols.filter(([j]) => dayOf(r[j] || '') != null).length >= 3) break; // the next table
+    const lead = r.filter((_, j) => !cols.some(([cj]) => cj === j)).join(' ');
+    const num = lead.match(/(?:^|\s)(\d{1,2})(?=\s|$)/);
+    const times = [...lead.matchAll(TIME)].map((m) => `${pad(+m[1])}:${m[2]}`);
+    n++;
+    for (const [j, day] of cols) {
+      const parts = String(r[j] || '').split(/\s*\|\s*/).map((x) => x.trim()).filter(Boolean);
+      if (!parts.length) continue;
+      let room = '';
+      const rest = [];
+      for (const p of parts) {
+        if (!room && (/(חדר|כיתה|מעבדה|אולם|מקלט|קומה)/.test(p) || /^\d{1,4}[א-ת]?$/.test(p))) room = p;
+        else rest.push(p);
+      }
+      const scored = rest.map((l) => ({ l, sc: subjectScore(l) }));
+      const best = scored.reduce((a, b) => (b.sc > a.sc ? b : a), scored[0] || { l: '', sc: -1 });
+      const teacher = rest.find((l) => looksLikeName(l) && l !== best.l) || '';
+      const subject = cleanSubject(rest.filter((l) => l !== teacher).join(' ').replace(TIME, ''));
+      if (!subject || subject.replace(/[^\p{L}]/gu, '').length < 2) continue;
+      lessons.push({ day, period: num ? +num[1] : n, start: times[0] || '', end: times[1] || '', subject, teacher: scrub(teacher), room: scrub(room) });
+    }
+  }
+  return { lessons, reversed: false, days: cols.length, rows: n, reason: lessons.length ? '' : 'empty' };
+}
+
 /** Extract positioned text from every page and parse the page that looks most like a timetable. */
 export async function parseTimetablePdf(blob) {
   const { openPdf } = await import('./pdf.js');

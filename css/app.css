@@ -1472,3 +1472,12 @@ mark { background: color-mix(in srgb, var(--accent) 22%, transparent); color: in
 [dir="ltr"] svg.flip { transform: scaleX(-1); }
 [dir="ltr"] .url-field input, [dir="ltr"] .field input[type="date"], [dir="ltr"] .field input[type="time"], [dir="ltr"] .import-row input[type="date"] { text-align: left; }
 .lang-seg { margin: 0; }
+
+/* browser bridge */
+.bridge p { margin: 0 0 10px; line-height: 1.5; }
+.bridge-h { margin: 18px 0 8px; font-size: 16px; }
+.bridge-steps { margin: 0 0 6px; padding-inline-start: 22px; display: flex; flex-direction: column; gap: 10px; line-height: 1.5; }
+.bridge-steps svg { width: 16px; height: 16px; vertical-align: -3px; }
+.bridge-drag { display: inline-block; padding: 2px 10px; border-radius: 8px; background: var(--accent-tint); color: var(--accent-text); font-weight: 600; text-decoration: none; }
+.bridge-row b { font-weight: 600; }
+.import-from { margin: 4px 2px 0; }
