@@ -1,6 +1,6 @@
 // Month calendar of exams and tasks (Apple Calendar style), RTL: Sunday on the right.
 import { LOCALE } from './i18n.js';
-import { S, subjectColor } from './core.js';
+import { S, subjectColor, subjectPaint } from './core.js';
 import { esc, isoDate, parseISO, fmtDateLong, DAY_LETTERS, pad } from './util.js';
 import { ICON } from './icons.js';
 import { empty } from './components.js';
@@ -32,7 +32,7 @@ export function calendarView(examCard, taskRow) {
     const ex = examsOn(iso);
     const tk = tasksOn(iso);
     const dots = [
-      ...ex.slice(0, 3).map((e) => `<i style="background:${subjectColor(e.subjectId)}"></i>`),
+      ...ex.slice(0, 3).map((e) => `<i style="background:${subjectPaint(e)}"></i>`),
       ...(tk.length && ex.length < 3 ? ['<i class="task-dot"></i>'] : []),
     ].join('');
     const label = `${d}${ex.length ? `, ${ex.length} מבחנים` : ''}${tk.length ? `, ${tk.length} משימות` : ''}`;

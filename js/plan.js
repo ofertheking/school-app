@@ -1,7 +1,7 @@
 // Study plan: an exam's topics that aren't mastered yet, spread over the days
 // left before it, with the last day kept for a full review. It's computed live,
 // so ticking a topic or changing the date reshapes the plan by itself.
-import { S, upcomingExams, subjectName, subjectColor } from './core.js';
+import { S, upcomingExams, subjectName, subjectColor, subjectNames, subjectPaint } from './core.js';
 import { esc, isoDate, addDays, startOfDay, daysUntil, relDay } from './util.js';
 import { ICON } from './icons.js';
 import { section } from './components.js';
@@ -88,9 +88,9 @@ export function todayPlanCard() {
     `<div class="card list today-plan">${rows
       .slice(0, 6)
       .map(({ e, t, review }) => `<div class="tp-row">
-        <span class="dot" style="background:${subjectColor(e.subjectId)}"></span>
+        <span class="dot" style="background:${subjectPaint(e)}"></span>
         <button class="tp-text" data-go="#exam-${e.id}"><b>${review ? 'חזרה על כל החומר' : esc(t.text)}</b>
-          <span class="sr-sub">${esc(subjectName(e.subjectId))} · ${esc(e.title || e.type)} · ${relDay(e.date)}</span></button>
+          <span class="sr-sub">${esc(subjectNames(e))} · ${esc(e.title || e.type)} · ${relDay(e.date)}</span></button>
         ${review ? `<button class="icon-btn sm tp-play" data-act="exam-study" data-id="${e.id}" aria-label="ללמוד עכשיו">${ICON.play}</button>` : topicBtn(e, t)}
       </div>`)
       .join('')}</div>`,

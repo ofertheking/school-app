@@ -1,5 +1,5 @@
 // External connections: Google Classroom, Webtop (paste import), calendar export.
-import { S, save, nextColor, subjectName } from './core.js';
+import { S, save, nextColor, subjectName, subjectNames } from './core.js';
 import { uid, isoDate, pad, norm, parseISO, addDays } from './util.js';
 
 // =====================================================================
@@ -457,7 +457,7 @@ function fold(line) {
 const compact = (iso) => iso.replace(/-/g, '');
 
 export function examTitle(e) {
-  const sn = e.subjectId ? subjectName(e.subjectId) : '';
+  const sn = e.subjectId ? subjectNames(e) : '';
   const base = e.title || e.type || 'מבחן';
   return sn && !base.includes(sn) ? `${e.type || 'מבחן'} ב${sn}: ${base}` : base;
 }

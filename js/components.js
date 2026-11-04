@@ -31,7 +31,7 @@ const seedOf = (str) => [...String(str)].reduce((h, c) => (h * 31 + c.charCodeAt
  */
 export function head(title, { back, actions = '', sub = '', navTitle, hero } = {}) {
   const banner = hero
-    ? `<header class="page-hero h-${hero.color || 'blue'}"${hero.nb ? ` style="--nb:${hero.nb}"` : ''}>${bannerArt(seedOf(title))}
+    ? `<header class="page-hero h-${hero.color || 'blue'}${hero.nb2 ? ' duo' : ''}"${hero.nb ? ` style="--nb:${hero.nb}${hero.nb2 ? `;--nb2:${hero.nb2}` : ''}"` : ''}>${bannerArt(seedOf(title))}
         <div class="ph-text">
           <h1 class="large-title">${esc(title)}</h1>
           ${sub ? `<p class="ph-sub">${sub}</p>` : ''}

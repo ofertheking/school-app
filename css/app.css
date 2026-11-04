@@ -2136,3 +2136,57 @@ html[data-vt="back"]::view-transition-new(root) { animation-name: vtInBack; }
   .db-ico { width: 30px; height: 30px; }
   .db-main { font-size: 15px; }
 }
+
+/* two subjects on one exam / task: the banner blends both colours */
+.page-hero.duo {
+  background: linear-gradient(120deg, color-mix(in srgb, var(--nb) 82%, #fff) 0%, var(--nb) 38%, var(--nb2) 72%, color-mix(in srgb, var(--nb2) 72%, #000) 100%);
+}
+.fl-note { font-weight: 500; color: var(--muted); font-size: 12px; margin-inline-start: 6px; }
+.fl-note::before { content: "· "; }
+.db-sub { overflow: hidden; text-overflow: ellipsis; }
+
+/* ---------- task steps (checklist) + repeating tasks ---------- */
+.chip.good { background: var(--good-tint); color: var(--good-text); }
+.steps-head { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
+.steps-count { font-size: 15px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.steps-count b { font-size: 22px; color: var(--text); }
+.steps-meter { flex: 1; height: 8px; border-radius: 4px; }
+.steps-meter .meter-fill { background: linear-gradient(90deg, var(--orange), var(--good)); border-radius: 4px; }
+.steps { display: flex; flex-direction: column; }
+.step { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 0.5px solid var(--sep); }
+.step:last-child { border-bottom: 0; }
+.step-check {
+  width: 28px; height: 28px; border-radius: 9px; flex: none; display: flex; align-items: center; justify-content: center;
+  box-shadow: inset 0 0 0 2px var(--muted-2); color: transparent; cursor: pointer;
+  transition: background 0.2s, box-shadow 0.2s, color 0.2s, transform 0.15s;
+}
+.step-check svg { width: 17px; height: 17px; stroke-width: 3; }
+.step-check:active { transform: scale(0.88); }
+.step.on .step-check { background: var(--good); box-shadow: none; color: #fff; animation: pickPop 0.34s cubic-bezier(0.3, 1.6, 0.5, 1); }
+.step-text { flex: 1; min-width: 0; font-size: 16px; overflow-wrap: anywhere; transition: color 0.2s; }
+.step.on .step-text { color: var(--muted); text-decoration: line-through; }
+.add-step { margin-bottom: 0; }
+.task-steps { display: flex; align-items: center; gap: 6px; margin-top: 4px; font-size: 12px; font-weight: 700; color: var(--muted); }
+.ts-bar { width: 70px; height: 5px; border-radius: 3px; background: var(--fill-2); overflow: hidden; }
+.ts-bar > span { display: block; height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--orange), var(--good)); }
+
+/* ---------- "השבוע שלי" ---------- */
+.wr-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.wr-tile {
+  --w: var(--accent);
+  display: flex; flex-direction: column; align-items: center; text-align: center; gap: 3px; padding: 10px 4px 9px;
+  border-radius: 16px; background: color-mix(in srgb, var(--w) 11%, var(--card));
+}
+.wr-ico {
+  width: 30px; height: 30px; border-radius: 9px; color: #fff; display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(140deg, color-mix(in srgb, var(--w) 70%, #fff), var(--w)); margin-bottom: 2px;
+}
+.wr-ico svg { width: 17px; height: 17px; }
+.wr-tile b { font-size: 17px; line-height: 1.15; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.wr-tile > span:last-child { font-size: 11.5px; color: var(--muted); font-weight: 600; line-height: 1.2; }
+.w-purple { --w: #af52de; } .w-orange { --w: #ff9500; } .w-red { --w: #ff3b30; } .w-indigo { --w: #5856d6; }
+.wr-trend { display: block; text-align: center; margin-top: 10px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.wr-trend.up { color: var(--good-text); }
+.wr-trend.down { color: var(--serious-text); }
+@media (max-width: 360px) { .wr-tile b { font-size: 15px; } }
+.wr-tile b small { font-size: 11px; font-weight: 600; color: var(--muted); margin-inline-start: 2px; }

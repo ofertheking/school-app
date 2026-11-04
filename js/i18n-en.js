@@ -302,6 +302,18 @@ const D = {
   'כותרת (למשל: סיכום פרק 3 — מלחמת העצמאות)': 'Title (e.g. Chapter 3 summary)', 'קישור': 'Link',
   'בעוד שבועיים': 'In 2 weeks', 'לפני שבוע': 'A week ago', 'ניקוי': 'Clear', 'התקדמות': 'Progress', 'להסיר': 'Remove',
   'בפעם הראשונה': 'first time', 'דף מחברת': 'Notebook page', 'מה צריך לעשות?': 'What needs doing?',
+
+  // ---- steps, repeating tasks, my week
+  'שלבים': 'Steps', 'שלבים שבוצעו': 'Steps done', 'מחיקת שלב': 'Delete step', 'עוד שלב…': 'Another step…',
+  'למשל: לקרוא את הפרק': 'e.g. Read the chapter', '✓ הכל בוצע': '✓ All done', 'הכל בוצע': 'All done',
+  'מחלקים עבודה גדולה לשלבים קטנים — ומסמנים כל שלב שסיימת.': 'Split a big job into small steps — and tick each one off.',
+  'כל השלבים בוצעו! 🎉 אפשר לסמן את המשימה כבוצעה': 'All steps done! 🎉 You can mark the task as done',
+  'חוזרת?': 'Repeats?', 'לא חוזרת': 'Doesn’t repeat', 'כל שבוע': 'Every week', 'כל שבועיים': 'Every 2 weeks',
+  'שלבים (לא חובה) — שורה לכל שלב': 'Steps (optional) — one per line',
+  'לקרוא את הפרק\nלענות על השאלות\nלהגיש': 'Read the chapter\nAnswer the questions\nHand it in',
+  'צעד אחר צעד': 'Step by step', 'כל השלבים במשימה (3 לפחות)': 'Every step of a task done (3 or more)',
+  'השבוע שלי': 'My week', 'השבוע הזה במספרים': 'That week in numbers', 'משימה בוצעה': 'task done', 'משימות בוצעו': 'tasks done',
+  'כמו בשבוע שעבר': 'Same as last week', 'אפשר לבחור כמה': 'you can pick several',
 };
 
 export const EN = new Map(Object.entries(D));
@@ -314,6 +326,11 @@ export const EN_PATTERNS = [
   ['(\\d+)% מוכנות', '$1% ready'],
   ['(\\d+) בשליטה', '$1 mastered'],
   ['רמת שליטה (\\d+) מתוך (\\d+)', 'Level $1 of $2'],
+  ['▲ (.+) יותר משבוע שעבר', '▲ $1 more than last week'],
+  ['▼ (.+) פחות משבוע שעבר', '▼ $1 less than last week'],
+  ['ממוצע (\\d+) ציונים', 'average of $1 grades'],
+  ['כל הכבוד! ✔︎ המשימה הבאה נוספה ל(.+) 🔁', 'Well done! ✔︎ The next one is on $1 🔁'],
+  ['(\\d+) ציונים ב-(\\d+) מקצועות', '$1 grades in $2 subjects'],
   ['בעוד (\\d+) ימים', 'In $1 days'],
   ['לפני (\\d+) ימים', '$1 days ago'],
   ['(\\d+) ימים', '$1 days'],

@@ -4,6 +4,7 @@ import {
   S, subject, subjectName, subjectColor, readiness, upcomingExams, pastExams, openTasks,
   gradeAverage, todayMinutes, weekDays, weekBySubject, streak, timerElapsed, examUrgency,
   dueLabelGroup, itemKind, exam, item, task, minutesBetween, COMMON_SUBJECTS, currentYear, hasGrade,
+  subjectsOf, hasSubject, subjectNames, subjectPaint, gradedRecords,
 } from './core.js';
 import {
   esc, fmtDate, fmtDateLong, fmtHebrewDate, fmtMin, fmtClock, relDay, daysUntil, greeting,
@@ -29,6 +30,7 @@ import { classCardsRow, subjectBanner, homeHero } from './classcards.js';
 import { lessonsOn } from './schedule.js';
 import { planSection, todayPlanCard } from './plan.js';
 import { achievementsSection } from './achievements.js';
+import { stepsSection, stepsProgress, repeatLabel } from './steps.js';
 
 // ---------- shared bits ----------
 
@@ -56,9 +58,9 @@ export function examCard(e, opts) {
 
 function examCardInner(e, { r, past, graded, right, check }) {
   return `<button class="card exam-card${check ? ' with-check' : ''}" data-go="#exam-${e.id}">
-    <span class="stripe" style="background:${subjectColor(e.subjectId)}"></span>
+    <span class="stripe" style="background:${subjectPaint(e)}"></span>
     <span class="exam-main">
-      <span class="row between"><span class="eyebrow">${esc(subjectName(e.subjectId))} · ${esc(e.type || 'מבחן')}</span>${right}</span>
+      <span class="row between"><span class="eyebrow">${esc(subjectNames(e))} · ${esc(e.type || 'מבחן')}</span>${right}</span>
       <span class="title">${esc(e.title || e.type || 'מבחן')}</span>
       <span class="muted small">${e.week ? `במהלך השבוע של ${fmtDate(e.date)}` : fmtDate(e.date)}${e.time ? ` · <bdi>${esc(e.time)}</bdi>` : ''}${(e.materialFiles || []).length + (e.itemIds || []).length ? ` · 📎 ${(e.materialFiles || []).length + (e.itemIds || []).length}` : ''}${(e.paperFiles || []).length ? ' · 📷' : ''}</span>
       ${
@@ -74,6 +76,7 @@ function examCardInner(e, { r, past, graded, right, check }) {
 
 export function taskRow(t) {
   const late = t.due && !t.done && daysUntil(t.due) < 0;
+  const sp = stepsProgress(t);
   const files = (t.materialFiles || []).length + (t.workFiles || []).length;
   const quickAttach = t.done && !(t.workFiles || []).length
     ? `<label class="row-attach" aria-label="הוספת העבודה שהגשתי">${ICON.clip}<input type="file" multiple data-attach-ref="task:${t.id}:work" hidden></label>`
@@ -82,9 +85,10 @@ export function taskRow(t) {
     <button class="check${t.done ? ' on' : ''}" data-act="task-toggle" data-id="${t.id}" aria-label="${t.done ? 'סימון כלא בוצע' : 'סימון כבוצע'}">${ICON.check}</button>
     <button class="task-body" data-go="#task-${t.id}">
       <span class="task-title">${esc(t.title)}</span>
-      <span class="task-meta">${dot(t.subjectId)}${esc(subjectName(t.subjectId))}${
+      <span class="task-meta"><span class="dot" style="background:${subjectPaint(t)}"></span>${esc(subjectNames(t))}${
         t.due ? ` · <span class="${late ? 'late' : ''}">${late ? '⚠︎ ' : ''}${relDay(t.due)}</span>` : ''
-      }${files ? ` · 📎 ${files}` : ''}${t.source === 'classroom' ? ' · <span class="badge">Classroom</span>' : ''}</span>
+      }${files ? ` · 📎 ${files}` : ''}${t.repeat ? ' · 🔁' : ''}${t.source === 'classroom' ? ' · <span class="badge">Classroom</span>' : ''}</span>
+      ${sp ? `<span class="task-steps"><span class="ts-bar"><span style="width:${sp.frac * 100}%"></span></span><bdi>${sp.done}/${sp.total}</bdi></span>` : ''}
     </button>
     ${quickAttach}${hasGrade(t) ? `<span class="task-grade">${esc(t.grade)}</span>` : ''}
   </div>`;
@@ -207,7 +211,7 @@ export function home() {
   const dueSoon = openTasks().filter((t) => t.due && daysUntil(t.due) <= 1).length;
   const chips = [
     todayN ? `${ICON.calendar}<span>${todayN} שיעורים היום</span>` : '',
-    nextEx ? `${ICON.exam}<span>${esc(subjectName(nextEx.subjectId))} · ${relDay(nextEx.date)}</span>` : '',
+    nextEx ? `${ICON.exam}<span>${esc(subjectNames(nextEx))} · ${relDay(nextEx.date)}</span>` : '',
     dueSoon ? `${ICON.tasks}<span>${dueSoon} ${dueSoon === 1 ? 'משימה' : 'משימות'} להגשה עד מחר</span>` : '',
   ].filter(Boolean);
   return `
@@ -274,7 +278,7 @@ function examChips() {
   const done = pastExams().length;
   return [
     `${ICON.exam}<span>${up.length} קרובים</span>`,
-    next ? `${ICON.calendar}<span>${esc(subjectName(next.subjectId))} · ${relDay(next.date)}</span>` : '',
+    next ? `${ICON.calendar}<span>${esc(subjectNames(next))} · ${relDay(next.date)}</span>` : '',
     done ? `${ICON.check}<span>${done} הוגשו</span>` : '',
   ];
 }
@@ -394,9 +398,10 @@ export function examDetail(id) {
     ${head(e.title || e.type || 'מבחן', {
       back: '#exams',
       actions: iconBtn('edit-exam', ICON.edit, 'עריכה', `data-id="${e.id}"`),
-      sub: `${esc(subjectName(e.subjectId))} · ${esc(e.type || 'מבחן')}`,
+      sub: `${esc(subjectNames(e))} · ${esc(e.type || 'מבחן')}`,
       hero: {
         nb: subjectColor(e.subjectId),
+        nb2: subjectsOf(e)[1] ? subjectColor(subjectsOf(e)[1]) : '',
         chips: [
           `${ICON.calendar}<span>${e.week ? `במהלך השבוע של ${fmtDate(e.date)}` : fmtDate(e.date)}${e.time ? ` · <bdi>${esc(e.time)}</bdi>` : ''}</span>`,
           (e.topics || []).length ? `${ICON.check}<span>${(e.topics || []).filter((x) => x.s === 2).length}/${e.topics.length} נושאים בשליטה</span>` : '',
@@ -496,11 +501,13 @@ export function taskDetail(id) {
     ${head(t.title || 'משימה', {
       back: '#tasks',
       actions: iconBtn('edit-task', ICON.edit, 'עריכה', `data-id="${t.id}"`),
-      sub: esc(subjectName(t.subjectId)),
+      sub: esc(subjectNames(t)),
       hero: {
         nb: subjectColor(t.subjectId),
+        nb2: subjectsOf(t)[1] ? subjectColor(subjectsOf(t)[1]) : '',
         chips: [
           t.due ? `${ICON.calendar}<span>עד ${fmtDate(t.due)}</span>` : '',
+          t.repeat ? `${ICON.sync}<span>${repeatLabel(t)}</span>` : '',
           (t.materialFiles || []).length + (t.workFiles || []).length ? `${ICON.clip}<span>${(t.materialFiles || []).length + (t.workFiles || []).length} קבצים</span>` : '',
         ],
       },
@@ -510,6 +517,7 @@ export function taskDetail(id) {
       <span class="check${t.done ? ' on' : ''}" aria-hidden="true">${ICON.check}</span>
       <span class="grow"><b>${t.done ? `בוצע${t.doneAt ? ` · ${fmtDate(isoDate(new Date(t.doneAt)))}` : ''}` : 'סימון כבוצע'}</b><span class="sr-sub">${t.done ? 'לחיצה מחזירה את המשימה לפתוחות' : 'אחרי זה אפשר להוסיף ציון וצילום של העבודה'}</span></span>
     </button>
+    ${stepsSection(t)}
     ${t.done ? work + material : material + work}
     ${section(
       'הערות',
@@ -571,6 +579,44 @@ function studyChips() {
     `${ICON.chart}<span>השבוע ${week.value} ${week.unit}</span>`,
     st ? `${ICON.flame}<span>רצף ${st} ${st === 1 ? 'יום' : 'ימים'}</span>` : '',
   ];
+}
+
+/** "השבוע שלי": the week in four numbers, with study time compared to the week before. */
+function weekRecap(off = 0) {
+  const ws = addDays(weekStart(), off * 7);
+  const we = addDays(ws, 7);
+  const from = isoDate(ws);
+  const to = isoDate(we);
+  const inWeek = (iso) => iso && iso >= from && iso < to;
+  const mins = weekDays(off).reduce((a, x) => a + x.minutes, 0);
+  const prev = weekDays(off - 1).reduce((a, x) => a + x.minutes, 0);
+  const tasksDone = S.data.tasks.filter((t) => t.done && t.doneAt && t.doneAt >= +ws && t.doneAt < +we).length;
+  const exams = S.data.exams.filter((e) => inWeek(e.date)).length;
+  const grades = gradedRecords().filter((r) => inWeek(r.date));
+  const gAvg = grades.length ? Math.round(grades.reduce((a, r) => a + r.grade, 0) / grades.length) : null;
+  if (!mins && !prev && !tasksDone && !exams && !grades.length) return '';
+  const diff = mins - prev;
+  const trend = prev || mins
+    ? diff > 0
+      ? `<span class="wr-trend up">▲ ${esc(fmtMin(diff))} יותר משבוע שעבר</span>`
+      : diff < 0
+      ? `<span class="wr-trend down">▼ ${esc(fmtMin(-diff))} פחות משבוע שעבר</span>`
+      : '<span class="wr-trend">כמו בשבוע שעבר</span>'
+    : '';
+  const tile = (icon, color, value, label) =>
+    `<div class="wr-tile w-${color}"><span class="wr-ico" aria-hidden="true">${ICON[icon]}</span><b>${value}</b><span>${label}</span></div>`;
+  return section(
+    off === 0 ? 'השבוע שלי' : 'השבוע הזה במספרים',
+    `<div class="card week-recap">
+      <div class="wr-grid">
+        ${tile('timer', 'purple', `${fmtMinShort(mins).value}<small>${fmtMinShort(mins).unit}</small>`, 'למידה')}
+        ${tile('tasks', 'orange', tasksDone, tasksDone === 1 ? 'משימה בוצעה' : 'משימות בוצעו')}
+        ${tile('exam', 'red', exams, exams === 1 ? 'מבחן' : 'מבחנים')}
+        ${tile('chart', 'indigo', gAvg ?? '—', grades.length ? `ממוצע ${grades.length} ציונים` : 'ציונים')}
+      </div>
+      ${trend}
+    </div>`
+  );
 }
 
 export function study() {
@@ -643,6 +689,7 @@ export function study() {
         <p class="muted small axis-note">ציר: שעות ביום</p>
       </div>`
     )}
+    ${weekRecap(off)}
     ${bySub.length ? section('לפי מקצוע', `<div class="card">${subjectBars(bySub)}</div>`) : ''}
     ${section(
       'פעילות אחרונה',
@@ -798,8 +845,8 @@ export function subjectDetail(id) {
   const weekMin = minutesBetween(ws, addDays(ws, 7), { subjectId: id });
   const totalMin = minutesBetween(0, Date.now() + 1, { subjectId: id });
   const avg = gradeAverage(id);
-  const ex = upcomingExams().filter((e) => e.subjectId === id);
-  const ts = openTasks().filter((t) => t.subjectId === id);
+  const ex = upcomingExams().filter((e) => hasSubject(e, id));
+  const ts = openTasks().filter((t) => hasSubject(t, id));
   const its = S.data.items.filter((i) => i.subjectId === id).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).slice(0, 6);
   return `
     ${head('', {

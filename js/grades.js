@@ -4,7 +4,7 @@
 import { LOCALE, RTL } from './i18n.js';
 import {
   S, save, subject, subjectName, subjectColor, pastExams, gradedRecords, hasGrade, semesterOf,
-  weightedAverage, upcomingExams, EXAM_TYPES, schoolYearName,
+  weightedAverage, upcomingExams, EXAM_TYPES, schoolYearName, subjectsOf, subjectNames, subjectNamesAnd, subjectPaint, hasSubject,
 } from './core.js';
 import { esc, fmtDate, isoDate, relDay, uid, parseISO, startOfDay } from './util.js';
 import { ICON } from './icons.js';
@@ -24,9 +24,11 @@ const fmtAvg = (v) => (v == null ? '—' : String(v));
 function bySubject(records) {
   const m = new Map();
   for (const r of records) {
-    const k = r.subjectId || '';
-    if (!m.has(k)) m.set(k, []);
-    m.get(k).push(r);
+    // a grade on a combined exam (פיזיקה + אלקטרוניקה) counts in each of its subjects
+    for (const k of subjectsOf(r).length ? subjectsOf(r) : ['']) {
+      if (!m.has(k)) m.set(k, []);
+      m.get(k).push(r);
+    }
   }
   return [...m.entries()].map(([sid, list]) => ({ sid, list, avg: weightedAverage(list) })).sort((a, b) => b.avg - a.avg);
 }
@@ -116,12 +118,12 @@ function trendChart(records) {
   const endY = yOf(running[n - 1]);
   const hits = records
     .map((r, i) => {
-      const tip = `${r.grade} · ${subjectName(r.subjectId)} · ${r.title} · ${fmtDate(r.date)} · ממוצע עד כאן ${running[i]}`;
+      const tip = `${r.grade} · ${subjectNames(r)} · ${r.title} · ${fmtDate(r.date)} · ממוצע עד כאן ${running[i]}`;
       return `<circle cx="${xOf(i).toFixed(1)}" cy="${yOf(r.grade).toFixed(1)}" r="12" class="c-hit" data-act="chart-tip" data-tip="${esc(tip)}" tabindex="0" role="img" aria-label="${esc(tip)}"><title>${esc(tip)}</title></circle>`;
     })
     .join('');
   const table = records
-    .map((r, i) => `<tr><td>${fmtDate(r.date)}</td><td>${esc(subjectName(r.subjectId))}</td><td>${esc(r.title)}</td><td>${r.grade}</td><td>${running[i]}</td></tr>`)
+    .map((r, i) => `<tr><td>${fmtDate(r.date)}</td><td>${esc(subjectNames(r))}</td><td>${esc(r.title)}</td><td>${r.grade}</td><td>${running[i]}</td></tr>`)
     .join('');
   return `<figure class="chart card trend">
     <div class="trend-legend small muted"><span class="lk"><i class="lk-dot"></i>ציון</span><span class="lk"><i class="lk-line"></i>ממוצע מצטבר</span></div>
@@ -285,8 +287,8 @@ export function gradesView(examCard) {
         .reverse()
         .map(
           (e) => `<button class="row-btn" data-go="${e.href}">
-            <span class="dot" style="background:${subjectColor(e.subjectId)}"></span>
-            <span class="grow">${esc(e.title)}<span class="sr-sub">${esc(e.type)} · ${esc(subjectName(e.subjectId))} · ${fmtDate(e.date)}${e.weight != null ? ` · משקל ${e.weight}%` : ''}</span></span>
+            <span class="dot" style="background:${subjectPaint(e)}"></span>
+            <span class="grow">${esc(e.title)}<span class="sr-sub">${esc(e.type)} · ${esc(subjectNames(e))} · ${fmtDate(e.date)}${e.weight != null ? ` · משקל ${e.weight}%` : ''}</span></span>
             <span class="grade-pill">${e.grade}</span><span class="chev">${ICON.fwd}</span>
           </button>`
         )
@@ -329,7 +331,7 @@ export function subjectGradesPage(sid) {
   const all = gradedRecords(real).filter((r) => inSem(r, sem));
   const avg = weightedAverage(all);
   const target = s?.target ? +s.target : null;
-  const next = upcomingExams().find((e) => e.subjectId === real);
+  const next = upcomingExams().find((e) => hasSubject(e, real));
   let calc = '';
   if (target && all.length) {
     const need = needed(all, target);
@@ -404,7 +406,7 @@ export function gradesHomeCard() {
     <span class="sum-body">
       <span>
         <span class="sum-big">${fmtAvg(avg)}</span><span class="sum-unit">ממוצע</span>
-        <span class="sum-sub">אחרון: ${last.grade} ב${esc(subjectName(last.subjectId))}</span>
+        <span class="sum-sub">אחרון: ${last.grade} ב${esc(subjectNames(last))}</span>
       </span>
       ${spark(all.slice(-10).map((r) => r.grade), 'var(--accent)')}
     </span>
@@ -499,7 +501,7 @@ export function gradeForm(presetSubject = '') {
     title: 'הוספת ציון',
     values: { subjectId: presetSubject || '', type: 'מבחן', date: isoDate() },
     fields: [
-      { name: 'subjectId', label: 'מקצוע', type: 'subject' },
+      { name: 'subjectId', label: 'מקצוע', type: 'subject', multi: 'extraSubjects' },
       { name: 'grade', label: 'ציון', type: 'number', inputmode: 'decimal', min: 0, max: 100, required: true, half: true, placeholder: '0–100' },
       { name: 'weight', label: 'משקל % (לא חובה)', type: 'number', inputmode: 'decimal', min: 0, max: 100, half: true, placeholder: 'רגיל' },
       { name: 'title', label: 'על מה?', placeholder: 'למשל: מבחן בפונקציות' },
@@ -513,7 +515,7 @@ export function gradeForm(presetSubject = '') {
         return false;
       }
       S.data.exams.push({
-        id: uid(), subjectId: v.subjectId, title: v.title || `${v.type} ב${subjectName(v.subjectId)}`, type: v.type,
+        id: uid(), subjectId: v.subjectId, extraSubjects: v.extraSubjects, title: v.title || `${v.type} ב${subjectNamesAnd([v.subjectId, ...v.extraSubjects])}`, type: v.type,
         date: v.date, time: '', topics: [], notes: '', grade: String(v.grade), weight: v.weight === '' ? '' : String(v.weight),
         done: true, source: 'manual', createdAt: Date.now(),
       });

@@ -1,5 +1,5 @@
 // Spotlight-style search across everything in the app.
-import { S, subjectName, itemKind, upcomingExams, openTasks } from './core.js';
+import { S, subjectName, itemKind, upcomingExams, openTasks, subjectNames } from './core.js';
 import { esc, fmtDate, norm, relDay } from './util.js';
 import { ICON } from './icons.js';
 import { head, empty, tile, bannerArt } from './components.js';
@@ -48,17 +48,17 @@ export function searchResults(raw) {
     row(`data-go="#subject-${s.id}"`, `<span class="tile-ico" style="--tile:var(--c${s.color % 8})" aria-hidden="true">${ICON.book}</span>`, '', hl(s.name, qRaw), '')
   ), subs.length));
 
-  const exams = d.exams.filter((e) => has(q, e.title, e.type, e.notes, subjectName(e.subjectId), ...(e.topics || []).map((t) => t.text)));
+  const exams = d.exams.filter((e) => has(q, e.title, e.type, e.notes, subjectNames(e), ...(e.topics || []).map((t) => t.text)));
   out.push(group('מבחנים', exams.slice(0, LIMIT).map((e) => {
     const topic = (e.topics || []).find((t) => norm(t.text).includes(q));
     return row(`data-go="#exam-${e.id}"`, 'exam', 'red', hl(e.title || e.type, qRaw),
-      `${esc(subjectName(e.subjectId))} · ${fmtDate(e.date)}${topic ? ` · ${hl(topic.text, qRaw)}` : ''}`);
+      `${esc(subjectNames(e))} · ${fmtDate(e.date)}${topic ? ` · ${hl(topic.text, qRaw)}` : ''}`);
   }), exams.length));
 
-  const tasks = d.tasks.filter((t) => has(q, t.title, t.notes, subjectName(t.subjectId)));
+  const tasks = d.tasks.filter((t) => has(q, t.title, t.notes, subjectNames(t)));
   out.push(group('משימות', tasks.slice(0, LIMIT).map((t) =>
     row(`data-go="#task-${t.id}"`, 'tasks', 'orange', hl(t.title, qRaw),
-      `${esc(subjectName(t.subjectId))}${t.due ? ` · ${fmtDate(t.due)}` : ''}${t.done ? ' · בוצע' : ''}`)
+      `${esc(subjectNames(t))}${t.due ? ` · ${fmtDate(t.due)}` : ''}${t.done ? ' · בוצע' : ''}`)
   ), tasks.length));
 
   const items = d.items.filter((it) => has(q, it.title, it.body, it.url, subjectName(it.subjectId)));
@@ -102,8 +102,8 @@ const JUMPS = [
 function browse() {
   const subs = S.data.subjects;
   const soon = [
-    ...upcomingExams().slice(0, 3).map((e) => row(`data-go="#exam-${e.id}"`, 'exam', 'red', esc(e.title || e.type), `${esc(subjectName(e.subjectId))} · ${relDay(e.date)}`)),
-    ...openTasks().filter((t) => t.due).slice(0, 2).map((t) => row(`data-go="#task-${t.id}"`, 'tasks', 'orange', esc(t.title), `${esc(subjectName(t.subjectId))} · ${relDay(t.due)}`)),
+    ...upcomingExams().slice(0, 3).map((e) => row(`data-go="#exam-${e.id}"`, 'exam', 'red', esc(e.title || e.type), `${esc(subjectNames(e))} · ${relDay(e.date)}`)),
+    ...openTasks().filter((t) => t.due).slice(0, 2).map((t) => row(`data-go="#task-${t.id}"`, 'tasks', 'orange', esc(t.title), `${esc(subjectNames(t))} · ${relDay(t.due)}`)),
   ];
   const recent = [...S.data.items]
     .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))

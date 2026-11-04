@@ -151,6 +151,36 @@ export function subjectColor(id) {
   return s ? `var(--c${s.color % COLOR_COUNT})` : 'var(--c-none)';
 }
 
+// ---------- several subjects on one exam / task / grade ----------
+// `subjectId` stays the main subject (everything old keeps working);
+// `extraSubjects` holds the others, e.g. פיזיקה + אלקטרוניקה.
+
+/** Every subject id of an exam / task / grade record, main one first. */
+export const subjectsOf = (x) => [...new Set([x?.subjectId, ...(x?.extraSubjects || x?.subjectIds || [])].filter(Boolean))];
+
+/** Does it belong to this subject? ('' = has no subject at all) */
+export const hasSubject = (x, sid) => (sid ? subjectsOf(x).includes(sid) : !subjectsOf(x).length);
+
+/** "פיזיקה + אלקטרוניקה" (or "כללי"). */
+export const subjectNames = (x) => {
+  const ids = subjectsOf(x);
+  return ids.length ? ids.map(subjectName).join(' + ') : subjectName('');
+};
+
+/** "פיזיקה ואלקטרוניקה" — for default titles ("מבחן בפיזיקה ואלקטרוניקה"). */
+export const subjectNamesAnd = (ids) => {
+  const n = ids.filter(Boolean).map(subjectName);
+  return n.length > 1 ? `${n.slice(0, -1).join(', ')} ו${n.at(-1)}` : n[0] || subjectName('');
+};
+
+/** A CSS background: the subject's colour, or its colours side by side. */
+export function subjectPaint(x) {
+  const ids = subjectsOf(x);
+  if (ids.length < 2) return subjectColor(ids[0] || '');
+  const step = 100 / ids.length;
+  return `linear-gradient(135deg, ${ids.map((id, i) => `${subjectColor(id)} ${i * step}% ${(i + 1) * step}%`).join(', ')})`;
+}
+
 export function nextColor() {
   const used = S.data.subjects.map((s) => s.color);
   for (let i = 0; i < COLOR_COUNT; i++) if (!used.includes(i)) return i;
@@ -195,15 +225,15 @@ export const hasGrade = (x) => x && x.grade != null && String(x.grade).trim() !=
 export function gradedRecords(subjectId) {
   const w = (x) => (x.weight !== '' && x.weight != null && +x.weight > 0 ? +x.weight : null);
   const exams = S.data.exams.filter(hasGrade).map((e) => ({
-    kind: 'exam', id: e.id, subjectId: e.subjectId, title: e.title || e.type || 'מבחן', type: e.type || 'מבחן',
+    kind: 'exam', id: e.id, subjectId: e.subjectId, subjectIds: subjectsOf(e), title: e.title || e.type || 'מבחן', type: e.type || 'מבחן',
     date: e.date, grade: +e.grade, weight: w(e), href: `#exam-${e.id}`,
   }));
   const tasks = S.data.tasks.filter(hasGrade).map((t) => ({
-    kind: 'task', id: t.id, subjectId: t.subjectId, title: t.title || 'משימה', type: 'משימה',
+    kind: 'task', id: t.id, subjectId: t.subjectId, subjectIds: subjectsOf(t), title: t.title || 'משימה', type: 'משימה',
     date: t.due || isoDate(new Date(t.doneAt || t.createdAt || Date.now())), grade: +t.grade, weight: w(t), href: `#task-${t.id}`,
   }));
   return [...exams, ...tasks]
-    .filter((r) => subjectId == null || r.subjectId === subjectId)
+    .filter((r) => subjectId == null || hasSubject(r, subjectId))
     .sort((a, b) => a.date.localeCompare(b.date));
 }
 

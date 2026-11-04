@@ -30,6 +30,7 @@ export const BADGES = [
   { id: 'cards-20', icon: 'cards', color: 'teal', title: 'זיכרון של פיל', desc: '20 כרטיסיות בשליטה', test: (d) => d.cards.filter((c) => (c.box || 0) >= 4).length >= 20 },
   { id: 'pages-10', icon: 'camera', color: 'green', title: 'צלם/ת המחברת', desc: '10 דפי מחברת', test: (d) => pages(d) >= 10 },
   { id: 'notes-5', icon: 'edit', color: 'pink', title: 'כותב/ת', desc: '5 פתקים', test: (d) => (d.notes || []).length >= 5 },
+  { id: 'steps', icon: 'check', color: 'orange', title: 'צעד אחר צעד', desc: 'כל השלבים במשימה (3 לפחות)', test: (d) => d.tasks.some((t) => (t.steps || []).length >= 3 && t.steps.every((x) => x.done)) },
 ];
 
 const unlocked = () => BADGES.filter((b) => {

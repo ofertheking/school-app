@@ -1,7 +1,7 @@
 // Generic UI pieces: bottom sheets, forms, confirm dialogs, toasts, file URLs.
 import { S, save, nextColor } from './core.js';
-import { esc, uid, isoDate, addDays, startOfDay, daysUntil, relDay, fmtDate } from './util.js';
-import { L } from './i18n.js';
+import { esc, uid, isoDate, addDays, startOfDay, daysUntil, relDay, parseISO } from './util.js';
+import { L, LOCALE } from './i18n.js';
 import { ICON } from './icons.js';
 import { getFile } from './store.js';
 
@@ -142,18 +142,24 @@ const QUICK_DATES = {
   past: [[0, 'היום'], [-1, 'אתמול'], [-7, 'לפני שבוע']],
 };
 
+const fmtDM = new Intl.DateTimeFormat(LOCALE, { day: 'numeric', month: 'short' });
+const fmtWD = new Intl.DateTimeFormat(LOCALE, { weekday: 'short' });
+
+/** Two short lines that fit a half-width field: "11 בנוב׳" / "יום ד׳ · בעוד שבוע". */
 function dateLabel(v) {
   if (!v) return { main: L('בחירת תאריך', 'Pick a date'), sub: '' };
+  const d = parseISO(v);
   const n = daysUntil(v);
-  return { main: fmtDate(v), sub: Math.abs(n) <= 60 ? relDay(v) : '' };
+  return { main: fmtDM.format(d), sub: `${fmtWD.format(d)}${Math.abs(n) <= 30 ? ` · ${relDay(v)}` : ''}` };
 }
 
-function subjectPicker(f, v, id) {
+function subjectPicker(f, v, id, values = {}) {
   const chip = (val, label, color, extra = '') =>
     `<button type="button" class="pick${extra}" data-pick="${esc(val)}"${color ? ` style="--pc:${color}"` : ''} aria-pressed="false">
       ${color ? '<span class="pick-dot" aria-hidden="true"></span>' : ''}<span>${label}</span></button>`;
   return `<select id="${id}" name="${f.name}" data-subject-select class="driven" tabindex="-1" aria-hidden="true">${subjectOptions(v)}</select>
-    <div class="picks" role="group">
+    ${f.multi ? `<input type="hidden" name="${f.multi}" value="${esc((values[f.multi] || []).join(','))}">` : ''}
+    <div class="picks${f.multi ? ' multi' : ''}" role="group"${f.multi ? ` data-multi="${f.multi}"` : ''}>
       ${chip('', esc(L('כללי', 'General')), '')}
       ${S.data.subjects.map((s) => chip(s.id, esc(s.name), `var(--c${s.color % 8})`)).join('')}
       ${chip('__new', `＋ ${esc(L('חדש', 'New'))}`, '', ' pick-new')}
@@ -199,7 +205,7 @@ function filesDrop(f, id) {
     <div class="drop-list" aria-live="polite"></div>`;
 }
 
-function fieldHTML(f, v) {
+function fieldHTML(f, v, values = {}) {
   const id = `f-${f.name}`;
   const req = f.required ? ' required' : '';
   const ph = f.placeholder ? ` placeholder="${esc(f.placeholder)}"` : '';
@@ -227,7 +233,7 @@ function fieldHTML(f, v) {
       tag = 'div';
       break;
     case 'subject':
-      input = subjectPicker(f, val, id);
+      input = subjectPicker(f, val, id, values);
       tag = 'div';
       cls = ' wide';
       break;
@@ -243,7 +249,7 @@ function fieldHTML(f, v) {
   const half = f.half && !cls ? ' half' : '';
   const labelAttr = tag === 'label' ? ` for="${id}"` : ` role="group" aria-labelledby="${id}-l"`;
   return `<${tag} class="field${half}${cls} ft-${f.type || 'text'}"${labelAttr}>
-    <span class="field-label" id="${id}-l">${esc(f.label)}</span>${input}
+    <span class="field-label" id="${id}-l">${esc(f.label)}${f.multi ? `<small class="fl-note">${esc(L('אפשר לבחור כמה', 'you can pick several'))}</small>` : ''}</span>${input}
     ${f.hint ? `<span class="field-hint">${esc(f.hint)}</span>` : ''}
   </${tag}>${f.quick ? quickRow(f) : ''}`;
 }
@@ -253,7 +259,42 @@ const fmtSize = (b) => (b > 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math
 /** Wire the chips / date buttons / file drops inside a form. */
 export function enhanceFields(form) {
   // chip pickers drive their hidden <select>
-  form.querySelectorAll('.picks').forEach((row) => {
+  form.querySelectorAll('.picks.multi').forEach((row) => {
+    // Several subjects: the first one picked is the main one (the <select>),
+    // the rest go in a hidden field.
+    const sel = row.parentElement.querySelector('select.driven');
+    const more = form.querySelector(`input[name="${row.dataset.multi}"]`);
+    const extra = row.parentElement.querySelector('.new-subject');
+    let list = [...new Set([sel.value, ...more.value.split(',')].filter(Boolean))];
+    const sync = () =>
+      row.querySelectorAll('.pick').forEach((b) => {
+        const on = b.dataset.pick ? list.includes(b.dataset.pick) : !list.length;
+        b.classList.toggle('on', on);
+        b.setAttribute('aria-pressed', on ? 'true' : 'false');
+      });
+    row.addEventListener('click', (e) => {
+      const b = e.target.closest('.pick');
+      if (!b) return;
+      const v = b.dataset.pick;
+      if (!v) list = [];
+      else list = list.includes(v) ? list.filter((x) => x !== v) : [...list, v];
+      sel.value = list[0] || '';
+      more.value = list.slice(1).join(',');
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+      if (extra) {
+        extra.hidden = !list.includes('__new');
+        if (!extra.hidden && v === '__new') extra.focus();
+      }
+      sync();
+      if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        b.classList.remove('pop');
+        void b.offsetWidth;
+        b.classList.add('pop');
+      }
+    });
+    sync();
+  });
+  form.querySelectorAll('.picks:not(.multi)').forEach((row) => {
     const sel = row.previousElementSibling;
     if (!sel || sel.tagName !== 'SELECT') return;
     const sync = () =>
@@ -395,7 +436,7 @@ export function formSheet({ title, fields, values = {}, submitLabel = 'שמיר�
         <h3>${esc(title)}</h3>
         <button type="submit" class="link-btn strong sh-save">${ICON.check}<span>${esc(submitLabel)}</span></button>
       </div>
-      <div class="fields">${fields.map((f) => fieldHTML(f, values[f.name])).join('')}</div>
+      <div class="fields">${fields.map((f) => fieldHTML(f, values[f.name], values)).join('')}</div>
       ${footer}
     </form>`,
     {
@@ -420,7 +461,14 @@ export function formSheet({ title, fields, values = {}, submitLabel = 'שמיר�
               vals[f.name] = [...el.files];
               continue;
             }
-            if (f.type === 'subject') v = resolveSubject(v, form.elements[`${f.name}__new`]?.value);
+            if (f.type === 'subject') {
+              const newName = form.elements[`${f.name}__new`]?.value;
+              v = resolveSubject(v, newName);
+              if (f.multi) {
+                const ids = String(form.elements[f.multi]?.value || '').split(',').filter(Boolean).map((x) => resolveSubject(x, newName));
+                vals[f.multi] = [...new Set(ids)].filter((x) => x && x !== v);
+              }
+            }
             if (f.type === 'number') v = v === '' ? '' : Number(v);
             if (typeof v === 'string') v = v.trim();
             vals[f.name] = v;

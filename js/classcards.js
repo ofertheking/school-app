@@ -1,6 +1,6 @@
 // Google-Classroom-style class cards and banners (with an iOS finish): a
 // coloured banner with geometric art per subject, the teacher, and what's next.
-import { S, upcomingExams, openTasks, gradeAverage } from './core.js';
+import { S, upcomingExams, openTasks, gradeAverage, hasSubject } from './core.js';
 import { esc, relDay, daysUntil, pad } from './util.js';
 import { ICON } from './icons.js';
 import { DAY_NAMES, lessonsOn } from './schedule.js';
@@ -34,8 +34,8 @@ export function nextLessonOf(sid) {
 
 /** Upcoming exams + open tasks of a subject, soonest first. */
 function upNext(sid, n = 2) {
-  const ex = upcomingExams().filter((e) => e.subjectId === sid).map((e) => ({ date: e.date, title: e.title || e.type, kind: 'exam' }));
-  const ts = openTasks().filter((t) => t.subjectId === sid && t.due).map((t) => ({ date: t.due, title: t.title, kind: 'task' }));
+  const ex = upcomingExams().filter((e) => hasSubject(e, sid)).map((e) => ({ date: e.date, title: e.title || e.type, kind: 'exam' }));
+  const ts = openTasks().filter((t) => hasSubject(t, sid) && t.due).map((t) => ({ date: t.due, title: t.title, kind: 'task' }));
   return [...ex, ...ts].sort((a, b) => a.date.localeCompare(b.date)).slice(0, n);
 }
 

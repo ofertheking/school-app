@@ -1,7 +1,7 @@
 // Boot, routing, event wiring and all user actions.
 import {
   S, load, save, saveNow, migrate, autoSnapshot, subject, exam, task, item, note, nextColor, timerElapsed,
-  subjectName, EXAM_TYPES, createItem, deck,
+  subjectName, EXAM_TYPES, createItem, deck, subjectsOf, subjectNamesAnd,
   YEAR_KEYS, switchYear, addYear, renameYear, archiveCurrentYear,
 } from './core.js';
 import { initStore, putFile, getFile, deleteFile, clearAll, loadState, saveState } from './store.js';
@@ -28,6 +28,7 @@ import * as Board from './examBoard.js';
 import * as Grades from './grades.js';
 import * as Notes from './notes.js';
 import * as Bridge from './bridge.js';
+import * as Steps from './steps.js';
 import * as Motion from './motion.js';
 import { checkAchievements } from './achievements.js';
 import { applyAppearance } from './appearance.js';
@@ -235,7 +236,7 @@ function examForm(e, presetSubject, presetDate = '') {
     title: isNew ? 'מבחן חדש' : 'עריכת מבחן',
     values: e || { subjectId: presetSubject || '', type: 'מבחן', date: presetDate || '' },
     fields: [
-      { name: 'subjectId', label: 'מקצוע', type: 'subject' },
+      { name: 'subjectId', label: 'מקצוע', type: 'subject', multi: 'extraSubjects' },
       { name: 'title', label: 'נושא / שם', placeholder: 'למשל: טריגונומטריה, פרקים 1–4' },
       { name: 'type', label: 'סוג', type: 'select', options: EXAM_TYPES.map((t) => ({ value: t, label: t })), half: true },
       { name: 'date', label: 'תאריך', type: 'date', required: true, half: true, quick: 'exam' },
@@ -251,7 +252,7 @@ function examForm(e, presetSubject, presetDate = '') {
     async onSubmit(v) {
       if (isNew) {
         const ex = {
-          id: uid(), subjectId: v.subjectId, title: v.title || `${v.type} ב${subjectName(v.subjectId)}`,
+          id: uid(), subjectId: v.subjectId, extraSubjects: v.extraSubjects, title: v.title || `${v.type} ב${subjectNamesAnd([v.subjectId, ...v.extraSubjects])}`,
           type: v.type, date: v.date, time: v.time, notes: '', grade: v.grade === '' || v.grade == null ? '' : v.grade,
           source: 'manual', createdAt: Date.now(),
           topics: splitLines(v.topics).map((text) => ({ id: uid(), text, s: 0 })),
@@ -262,7 +263,7 @@ function examForm(e, presetSubject, presetDate = '') {
         navigate(`#exam-${ex.id}`);
         toast('המבחן נוסף. בהצלחה! 🍀');
       } else {
-        Object.assign(e, { subjectId: v.subjectId, title: v.title || e.title, type: v.type, date: v.date, time: v.time });
+        Object.assign(e, { subjectId: v.subjectId, extraSubjects: v.extraSubjects, title: v.title || e.title, type: v.type, date: v.date, time: v.time });
         save();
         render();
       }
@@ -285,12 +286,14 @@ function taskForm(t, presetSubject, presetDue = '') {
     values: t || { subjectId: presetSubject || '', due: presetDue || '' },
     fields: [
       { name: 'title', label: 'מה צריך לעשות?', required: true, placeholder: 'למשל: תרגילים 1–10 עמ׳ 45' },
-      { name: 'subjectId', label: 'מקצוע', type: 'subject' },
+      { name: 'subjectId', label: 'מקצוע', type: 'subject', multi: 'extraSubjects' },
       { name: 'due', label: 'עד מתי?', type: 'date', half: true, quick: 'task' },
       { name: 'grade', label: 'ציון (אם כבר קיבלת)', type: 'number', inputmode: 'decimal', min: 0, max: 100, half: true, placeholder: '—' },
+      { name: 'repeat', label: 'חוזרת?', type: 'select', options: Steps.REPEATS },
       { name: 'notes', label: 'הערות', type: 'textarea', rows: 3 },
       ...(isNew
         ? [
+            { name: 'steps', label: 'שלבים (לא חובה) — שורה לכל שלב', type: 'textarea', rows: 2, placeholder: 'לקרוא את הפרק\nלענות על השאלות\nלהגיש' },
             { name: 'files', label: 'דף עבודה / חומר מהמורה (לא חובה)', type: 'files', accept: Files.ACCEPT_ALL },
             { name: 'work', label: 'העבודה שהגשתי — תמונות, סרטונים, PDF… (לא חובה)', type: 'files', accept: '' },
           ]
@@ -300,14 +303,17 @@ function taskForm(t, presetSubject, presetDue = '') {
     async onSubmit(v) {
       const files = v.files;
       const work = v.work;
+      const steps = v.steps;
       delete v.files;
       delete v.work;
+      delete v.steps;
       if (v.grade == null) v.grade = '';
       if (isNew) {
         // A task that already has a grade or handed-in work was obviously handed in.
         const done = v.grade !== '' || !!work?.length;
         const nt = { id: uid(), ...v, done, doneAt: done ? Date.now() : null, source: 'manual', createdAt: Date.now() };
         S.data.tasks.push(nt);
+        if (steps) Steps.addSteps(nt, steps);
         save();
         if (files?.length) await Files.attachTo(`task:${nt.id}:material`, files);
         if (work?.length) await Files.attachTo(`task:${nt.id}:work`, work);
@@ -894,9 +900,14 @@ const ACTIONS = {
     if (!t.done) Motion.burstFrom(el);
     t.done = !t.done;
     t.doneAt = t.done ? Date.now() : null;
+    const next = t.done ? Steps.spawnNext(t) : null;
     save();
     render();
     if (!t.done) return;
+    if (next) {
+      toast(`כל הכבוד! ✔︎ המשימה הבאה נוספה ל${fmtDate(next.due)} 🔁`, 4500);
+      return;
+    }
     // From a list: offer a shortcut to add the handed-in work.
     if (routeName() !== `task-${id}` && !(t.workFiles || []).length) toast('כל הכבוד! ✔︎', 5000, { label: 'הוספת ההגשה', go: `#task-${id}` });
     else toast('כל הכבוד! ✔︎');
@@ -1085,13 +1096,13 @@ const ACTIONS = {
   },
 };
 
-Object.assign(ACTIONS, Sched.actions, Cards.actions, Importer.actions, Webtop.actions, Files.actions, Notebooks.actions, Search.actions, Calendar.actions, Recover.actions, Grades.actions, Notes.actions, Bridge.actions, {
+Object.assign(ACTIONS, Sched.actions, Cards.actions, Importer.actions, Webtop.actions, Files.actions, Notebooks.actions, Search.actions, Calendar.actions, Recover.actions, Grades.actions, Notes.actions, Bridge.actions, Steps.actions, {
   'exam-link-items'({ id }) {
     const e = exam(id);
     const chosen = new Set(e.itemIds || []);
     const list = S.data.items
       .filter((it) => !it.notebook || it.body?.trim())
-      .sort((a, b) => (b.subjectId === e.subjectId) - (a.subjectId === e.subjectId) || (b.updatedAt || 0) - (a.updatedAt || 0));
+      .sort((a, b) => subjectsOf(e).includes(b.subjectId) - subjectsOf(e).includes(a.subjectId) || (b.updatedAt || 0) - (a.updatedAt || 0));
     if (!list.length) return toast('עוד אין סיכומים. אפשר ליצור "סיכום חדש"');
     openSheet(
       `<div class="sheet-head"><button type="button" class="link-btn" data-close>ביטול</button><h3>סיכומים למבחן</h3><button type="button" class="link-btn strong" data-save>שמירה</button></div>
@@ -1283,6 +1294,15 @@ document.addEventListener('submit', (e) => {
     Cards.addCards(f.dataset.id, [{ front, back }]);
     render();
     view.querySelector('.add-card textarea[name=front]')?.focus();
+    return;
+  }
+  if (f.dataset.form === 'step') {
+    e.preventDefault();
+    const t = task(f.dataset.id);
+    if (t && Steps.addSteps(t, f.elements.t.value)) {
+      render();
+      view.querySelector('.add-step textarea')?.focus();
+    }
     return;
   }
   if (f.dataset.form !== 'topic') return;
